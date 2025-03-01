@@ -1,0 +1,31 @@
+function getBookValueFMP(triggerCell, symbol) {
+ // Do not run unless trigger cell passed from source spreadsheet is set to "Enabled"
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  if (triggerCell !== "Enabled") {
+    return "Function Disabled";
+  }
+    var apiKey = "add api key here";  // Replace with your FMP API key
+  var url = "https://financialmodelingprep.com/api/v3/balance-sheet-statement/" + symbol + "?apikey=" + apiKey;
+  var sharesUrl = "https://financialmodelingprep.com/api/v3/profile/" + symbol + "?apikey=" + apiKey;
+  
+  try {
+    // Fetch Total Shareholder Equity
+    var response = UrlFetchApp.fetch(url);
+    var json = JSON.parse(response.getContentText());
+    var shareholderEquity = json[0]["totalStockholdersEquity"];
+    
+    // Fetch Total Shares Outstanding
+    var sharesResponse = UrlFetchApp.fetch(sharesUrl);
+    var sharesJson = JSON.parse(sharesResponse.getContentText());
+    var sharesOutstanding = sharesJson[0]["mktCap"] / sharesJson[0]["price"];  // Derived from Market Cap / Price
+    
+    // Compute Book Value Per Share (BVPS)
+    var bvps = shareholderEquity / sharesOutstanding;
+    
+    // Return results as a single row (array)
+    return [[shareholderEquity, sharesOutstanding, bvps]];
+    
+  } catch (e) {
+    return [["Error fetching data: " + e.toString()]];
+  }
+}
