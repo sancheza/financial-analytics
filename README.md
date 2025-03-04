@@ -9,7 +9,7 @@ Create a Google worksheet with stock tickers in one column and a trigger cell us
 
 You will need to update the function with your API key. You can obtain it at the link listed below under Dependencies.
 
-The function will populate the cell in which it is called as well as the two to the right of it. See cells I2 through K2 in the demo below.
+The function will populate the cell in which it is called as well as the two to the right of it. See cells I2 through K2 in the demo below. foo
 
 
 ```Dependencies: Google Sheets, Financial Modeling Prep (FMP) free API key```[(get it here)](https://financialmodelingprep.com)
