@@ -2,9 +2,10 @@
 
 ### getBookValue
 
-This is a Google Sheets function that pulls book value for a set of tickers.
+This is a Google Sheets function that populates book value in a worksheet for a set of tickers.
 
-```Dependencies: Google Sheets```
+```Dependencies: Google Sheets, Financial Modeling Prep (FMP) free API key```[(get it here)](https://financialmodelingprep.com)
+
 ![](https://github.com/sancheza/Finance-scripts/blob/main/getBookValueFMP-demo.gif)
 
 
