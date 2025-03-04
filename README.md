@@ -1,4 +1,4 @@
-# Finance-scripts repo
+# Finance scripts repo
 
 ### getBookValue
 
