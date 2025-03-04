@@ -5,8 +5,11 @@
 Dependencies: Google Sheets
 
 
+<p style="font-family: 'Consolas', monospace; font-size: 18px;">
+get-dividends
+</p>
 
-**get-dividend** - This script obtains dividend yield for a list of stocks defined in ticker.txt and outputs in the file dividends.txt. This version leverages the Yahoo Finance API to pull dividend data.
+This script obtains dividend yield for a list of stocks defined in ticker.txt and outputs in the file dividends.txt. This version leverages the Yahoo Finance API to pull dividend data.
 
 Dependencies: Python 3, yfinance module
 
