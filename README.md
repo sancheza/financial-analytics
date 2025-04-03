@@ -1,5 +1,7 @@
 # Finance scripts repo
 
+This repo contains python scripts and libre office functions for performing financial analytics.
+
 ### getBookValue
 
 This is a Google Sheets function that populates book value in a worksheet for a set of tickers.
