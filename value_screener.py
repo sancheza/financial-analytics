@@ -55,178 +55,150 @@ class AlphaVantageClient:
             logger.error(f"Error fetching overview for {ticker}: {e}")
             return {}
 
-class EdgarClient:
-    def __init__(self, email: str):
-        """Initialize SEC EDGAR client with required user agent"""
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept": "application/json",
-            "Host": "data.sec.gov",
-            "From": email
-        }
-        
-    def _make_request(self, url: str) -> requests.Response:
-        """Make request to SEC EDGAR API with proper headers and error handling"""
+    def get_market_cap(self, ticker):
+        """Get market capitalization"""
         try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-            return response
+            overview = self.get_overview(ticker)
+            return float(overview.get('MarketCapitalization', 0))
         except Exception as e:
-            logger.error(f"Error making request to {url}: {e}")
-            raise
+            logger.error(f"Error fetching market cap for {ticker}: {e}")
+            return None
+
+    def get_dividend_history(self, ticker):
+        """Get dividend history using yfinance as Alpha Vantage doesn't provide historical dividends"""
+        try:
+            stock = yf.Ticker(ticker)
+            return stock.dividends
+        except Exception as e:
+            logger.error(f"Error fetching dividend history for {ticker}: {e}")
+            return None
+
+class EdgarClient:
+    def __init__(self):
+        self.ticker_to_cik = {}
+        self.last_request_time = 0
+        self.min_request_interval = 0.1  # 100ms between requests
+        self.headers = {
+            'User-Agent': 'FinancialAnalytics/1.0 (asanchez@example.com)',  # Required by SEC
+            'Accept': 'application/json',
+        }
+
+    def _wait_for_rate_limit(self):
+        """Ensure we wait at least min_request_interval between requests"""
+        current_time = time.time()
+        time_since_last_request = current_time - self.last_request_time
+        if time_since_last_request < self.min_request_interval:
+            time.sleep(self.min_request_interval - time_since_last_request)
+        self.last_request_time = time.time()
 
     def get_cik(self, ticker: str) -> Optional[str]:
-        """Get CIK number for ticker using mapping file"""
+        """Get the CIK for a given ticker symbol."""
+        if ticker in self.ticker_to_cik:
+            return self.ticker_to_cik[ticker]
+
+        self._wait_for_rate_limit()
+        
         try:
-            # Hard-code known CIKs for testing
-            cik_mapping = {
-                'PFE': '0000078003',
-                'AAPL': '0000320193',
-                'MSFT': '0000789019',
-                'GOOGL': '0001652044'
-            }
+            response = requests.get(
+                'https://www.sec.gov/files/company_tickers_exchange.json',
+                headers=self.headers
+            )
+            response.raise_for_status()
+            data = response.json()
             
-            ticker = ticker.upper()
-            if ticker in cik_mapping:
-                return cik_mapping[ticker]
-            
-            # If not in mapping, try SEC API
-            url = "https://www.sec.gov/include/ticker.txt"
-            response = self._make_request(url)
-            
-            # Parse tab-delimited file
-            for line in response.text.splitlines():
-                if '\t' in line:
-                    symbol, cik = line.strip().split('\t', 1)
-                    if symbol.upper() == ticker:
-                        return str(int(cik)).zfill(10)
-            
-            logger.warning(f"No CIK found for ticker {ticker}")
-            return None
-        except Exception as e:
-            logger.error(f"Error getting CIK for {ticker}: {e}")
-            if isinstance(e, requests.exceptions.HTTPError):
-                logger.error(f"HTTP Status Code: {e.response.status_code}")
-                logger.error(f"Response Text: {e.response.text[:500]}")
+            # Search through the data for the ticker
+            for entry in data['data']:
+                if entry[2] == ticker:  # Index 2 contains the ticker symbol
+                    cik = str(entry[0]).zfill(10)  # Index 0 contains the CIK
+                    self.ticker_to_cik[ticker] = cik
+                    return cik
+                    
+            logging.warning(f"No CIK found for ticker {ticker}")
             return None
             
-    def get_company_facts(self, cik: str) -> Optional[Dict]:
-        """Get company financial facts from SEC EDGAR"""
-        try:
-            url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
-            response = self._make_request(url)
-            return response.json()
-        except Exception as e:
-            logger.error(f"Error getting company facts for CIK {cik}: {e}")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error getting CIK for {ticker}: {str(e)}")
             return None
 
-    def get_latest_value(self, facts: Dict, concept: str, unit: str = 'USD') -> Optional[float]:
-        """Get the most recent value for a given concept from company facts"""
-        try:
-            us_gaap = facts.get('facts', {}).get('us-gaap', {})
-            if concept in us_gaap and unit in us_gaap[concept].get('units', {}):
-                values = us_gaap[concept]['units'][unit]
-                # Filter for annual 10-K reports and get most recent
-                annual_values = [v for v in values if v.get('form') == '10-K']
-                if annual_values:
-                    return sorted(annual_values, key=lambda x: x['end'])[-1]['val']
-            return None
-        except Exception as e:
-            logger.error(f"Error getting latest value for {concept}: {e}")
-            return None
-
-    def get_financial_data(self, ticker: str) -> Dict[str, Any]:
-        """Get comprehensive financial data from SEC EDGAR"""
-        data = {}
-        cik = self.get_cik(ticker)
+    def get_financial_data(self, cik: str, concept: str) -> Optional[Dict]:
+        """Get financial data for a given CIK and concept."""
         if not cik:
-            return data
+            return None
 
-        facts = self.get_company_facts(cik)
-        if not facts:
-            return data
-
+        self._wait_for_rate_limit()
+        
         try:
-            # Get latest income statement metrics
-            net_income = self.get_latest_value(facts, 'NetIncomeLoss')
-            revenue = self.get_latest_value(facts, 'Revenues')
-            data['netIncome'] = net_income
-            data['revenue'] = revenue
+            url = f'https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{concept}.json'
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error getting financial data for CIK {cik}, concept {concept}: {str(e)}")
+            return None
 
-            # Balance sheet metrics
-            total_assets = self.get_latest_value(facts, 'Assets')
-            total_liabilities = self.get_latest_value(facts, 'Liabilities')
-            data['totalAssets'] = total_assets
-            data['totalLiabilities'] = total_liabilities
+    def get_financial_data_with_alternatives(self, cik: str, concepts: List[str]) -> Optional[Dict]:
+        """Try multiple concept names and return the first one that works"""
+        for concept in concepts:
+            data = self.get_financial_data(cik, concept)
+            if data and 'units' in data:
+                return data
+        return None
 
-            # Cash flow metrics
-            operating_cash_flow = self.get_latest_value(facts, 'NetCashProvidedByUsedInOperatingActivities')
-            capex = self.get_latest_value(facts, 'PaymentsToAcquirePropertyPlantAndEquipment')
-            data['operatingCashFlow'] = operating_cash_flow
-            data['capitalExpenditures'] = capex
-
-            # Market data and ratios
-            shares_outstanding = self.get_latest_value(facts, 'CommonStockSharesOutstanding', 'shares')
-            if shares_outstanding:
-                data['sharesOutstanding'] = shares_outstanding
-
-            # Get historical EPS data
-            eps_df = self.get_historical_eps(ticker)
-            if eps_df is not None and not eps_df.empty:
-                data['historicalEPS'] = eps_df.to_dict('records')
-
-            return data
-
-        except Exception as e:
-            logger.error(f"Error getting financial data for {ticker}: {e}")
-            return data
-            
     def get_historical_eps(self, ticker: str) -> Optional[pd.DataFrame]:
         """Get historical EPS data from SEC filings"""
         cik = self.get_cik(ticker)
         if not cik:
             return None
             
-        facts = self.get_company_facts(cik)
-        if not facts:
-            return None
-            
         try:
-            eps_tags = [
-                'EarningsPerShareDiluted',
-                'EarningsPerShareBasic',
-                'IncomeLossFromContinuingOperationsPerDilutedShare'
-            ]
-            
-            us_gaap = facts.get('facts', {}).get('us-gaap', {})
-            eps_data = []
-            
-            for tag in eps_tags:
-                if tag in us_gaap:
-                    units = us_gaap[tag].get('units', {})
-                    if 'USD/shares' in units:
-                        values = units['USD/shares']
-                        for v in values:
-                            if 'form' in v and v['form'] == '10-K':
-                                eps_data.append({
-                                    'date': v['end'],
-                                    'eps': v['val'],
-                                    'tag': tag,
-                                    'fp': 'FY'  # Annual data from 10-K
-                                })
-                                
-            if eps_data:
-                df = pd.DataFrame(eps_data)
-                df['date'] = pd.to_datetime(df['date'])
-                df = df.sort_values('date', ascending=False)
-                return df
+            # Get EPS data from SEC API
+            eps_data = self.get_financial_data(cik, 'EarningsPerShareDiluted')
+            if not eps_data or 'units' not in eps_data:
+                return None
                 
-            logger.error(f"No EPS data found for {ticker}")
-            return None
+            # Extract EPS values from annual reports
+            eps_values = []
+            for unit_type in eps_data['units']:
+                for entry in eps_data['units'][unit_type]:
+                    if entry.get('form') == '10-K':  # Only use annual reports
+                        eps_values.append({
+                            'date': pd.to_datetime(entry['end']),
+                            'eps': entry['val']
+                        })
+            
+            if not eps_values:
+                return None
+                
+            # Convert to DataFrame and sort by date
+            eps_df = pd.DataFrame(eps_values)
+            return eps_df.sort_values('date', ascending=False)
             
         except Exception as e:
-            logger.error(f"Error processing EPS data for {ticker}: {e}")
+            logger.error(f"Error getting historical EPS for {ticker}: {str(e)}")
             return None
+
+    def get_sector_specific_metrics(self, cik: str, ticker: str) -> Dict[str, Any]:
+        """Get sector-specific financial metrics"""
+        # Try various sector-specific concept names
+        metrics = {}
+        
+        # Financial sector specific metrics
+        financial_metrics = [
+            ('InterestAndDividendIncomeOperating', 'NetInterestIncome'),
+            ('NoninterestExpense', 'OperatingExpenses'),
+            ('ProvisionForLoanAndLeaseLosses', 'LoanLossProvision'),
+            ('NonInterestIncome', 'NonInterestIncome'),
+            ('InterestIncome', 'InterestIncome')
+        ]
+        
+        for primary, fallback in financial_metrics:
+            data = self.get_financial_data_with_alternatives(cik, [primary, fallback])
+            if data:
+                val = get_latest_annual_value(data)
+                if val is not None:
+                    metrics[primary] = val
+        
+        return metrics
 
 # Configure logging
 logging.basicConfig(
@@ -247,7 +219,7 @@ SETTINGS = {
     'EARNINGS_GROWTH_MIN': 33,     # Default: 33%
     'REQUEST_DELAY': 2,           # Delay between API requests in seconds
     'DATA_MAX_AGE_DAYS': 7,        # Maximum age of data before requiring refresh
-    'ALPHA_VANTAGE_KEY': os.getenv('ALPHA_VANTAGE_KEY', 'demo')  # Get API key from environment
+    'ALPHA_VANTAGE_KEY': 'MBSVCBG83NNOZ197'  # Alpha Vantage API key
 }
 
 # Data storage settings
@@ -259,13 +231,8 @@ def ensure_data_dir():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_sp500_tickers():
-    """Get list of S&P 500 tickers using pandas_datareader"""
-    try:
-        sp500 = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
-        return sp500['Symbol'].tolist()
-    except Exception as e:
-        logger.error(f"Error fetching S&P 500 tickers: {e}")
-        return []
+    """Get list of test tickers (temporary override)"""
+    return ['PFE', 'AAPL', 'MRNA', 'MSFT', 'MS']
 
 def load_stock_data() -> Dict[str, Any]:
     """Load stock data from JSON file"""
@@ -358,12 +325,11 @@ def get_earnings_growth(ticker: str, edgar_client: Optional[EdgarClient] = None,
         logger.debug(f"Error calculating earnings growth: {e}")
         return None
 
-def check_positive_earnings_streak(income_stmt_df, years=8):
+def check_positive_earnings_streak(sec_data, years=8):
     """Check if earnings have been positive for the specified number of years"""
     try:
-        if len(income_stmt_df) >= years:
-            net_income = income_stmt_df['netIncome'].astype(float)
-            return all(income > 0 for income in net_income[:years])
+        if 'historicalEPS' in sec_data and len(sec_data['historicalEPS']) >= years:
+            return all(float(eps['eps']) > 0 for eps in sec_data['historicalEPS'][:years])
         logger.debug(f"Insufficient earnings history for streak check")
         return False
     except Exception as e:
@@ -393,244 +359,510 @@ def check_dividend_history(stock, years=20):
         logger.debug(f"Error checking dividend history: {e}")
         return False
 
-def calculate_roic(income_stmt_df, balance_sheet_df):
+def calculate_roic(sec_data, _):
     """Calculate Return on Invested Capital"""
     try:
-        if not income_stmt_df.empty and not balance_sheet_df.empty:
-            net_income = float(income_stmt_df.iloc[0]['netIncome'])
-            total_assets = float(balance_sheet_df.iloc[0]['totalAssets'])
-            current_liabilities = float(balance_sheet_df.iloc[0]['totalCurrentLiabilities'])
+        # Get net income
+        net_income = sec_data.get('netIncome')
+        if not net_income:
+            return None
             
-            invested_capital = total_assets - current_liabilities
-            if invested_capital != 0:
-                roic = (net_income / invested_capital) * 100
-                return roic
+        # Get total assets
+        total_assets = sec_data.get('totalAssets')
+        if not total_assets:
+            return None
+            
+        # Get total liabilities
+        total_liabilities = sec_data.get('totalLiabilities')
+        if not total_liabilities:
+            return None
+        
+        invested_capital = total_assets - total_liabilities
+        if invested_capital != 0:
+            roic = (net_income / invested_capital) * 100
+            return roic
+                
         logger.debug("Missing data for ROIC calculation")
         return None
     except Exception as e:
         logger.debug(f"Error calculating ROIC: {e}")
         return None
 
-def modern_graham_screen(ticker: str, use_local: bool = False) -> Optional[Dict[str, Any]]:
-    """Screen a stock using Graham's criteria with SEC EDGAR data"""
-    if use_local:
-        data = load_stock_data()
-        if ticker in data:
-            stored_data = data[ticker]
-            if stored_data:
-                if any(stored_data.get(field) is None for field in ["Balance Sheet Ratio", "FCF Yield (%)", "ROIC (%)", "10Y Earnings Growth (%)"]):
-                    logger.debug(f"{ticker}: Some financial ratios need updating. Run with --update to refresh data.")
-                return stored_data
-            logger.debug(f"No valid data found for {ticker}")
-            return None
-
-    # Only proceed with API calls if not in local mode
+def validate_sec_data(sec_data: Dict) -> bool:
+    """Validate that SEC data is recent and complete"""
     try:
-        if not use_local:
-            time.sleep(SETTINGS['REQUEST_DELAY'])
-        
-        # Initialize SEC EDGAR client
-        edgar_client = EdgarClient("example@user.com")  # Replace with actual email
-        
-        # Get financial data from SEC EDGAR
-        sec_data = edgar_client.get_financial_data(ticker)
-        
-        # If SEC data is incomplete, fall back to Alpha Vantage
-        if not sec_data or not all(k in sec_data for k in ['netIncome', 'totalAssets', 'totalLiabilities']):
-            logger.debug(f"Incomplete SEC data for {ticker}, falling back to Alpha Vantage")
-            av_client = AlphaVantageClient(SETTINGS['ALPHA_VANTAGE_KEY'])
-            overview = av_client.get_overview(ticker)
-            income_stmt = av_client.get_income_statement(ticker)
-            balance_sheet = av_client.get_balance_sheet(ticker)
-            cash_flow = av_client.get_cash_flow(ticker)
-        else:
-            overview = {}
-            income_stmt = pd.DataFrame([sec_data]) if 'netIncome' in sec_data else pd.DataFrame()
-            balance_sheet = pd.DataFrame([{
-                'totalAssets': sec_data.get('totalAssets'),
-                'totalLiabilities': sec_data.get('totalLiabilities')
-            }]) if 'totalAssets' in sec_data else pd.DataFrame()
-            cash_flow = pd.DataFrame([{
-                'operatingCashflow': sec_data.get('operatingCashFlow'),
-                'capitalExpenditures': sec_data.get('capitalExpenditures')
-            }]) if 'operatingCashFlow' in sec_data else pd.DataFrame()
+        if not sec_data:
+            return False
+            
+        # Check if we have all required fields
+        required_fields = ['netIncome', 'totalAssets', 'totalLiabilities', 
+                         'operatingCashFlow', 'capitalExpenditures']
+        return all(field in sec_data for field in required_fields)
+    except Exception as e:
+        logger.error(f"Error validating SEC data: {e}")
+        return False
 
-        # Calculate P/E using EPS from SEC data
-        eps_df = edgar_client.get_historical_eps(ticker)
+def calculate_pe_ratio(stock, eps_df: Optional[pd.DataFrame]) -> Optional[float]:
+    """Calculate P/E ratio with negative values for negative earnings"""
+    try:
         if eps_df is not None and not eps_df.empty:
             latest_eps = eps_df.iloc[0]['eps']
-            # Get current stock price from yfinance
-            stock = yf.Ticker(ticker)
+            if latest_eps == 0:
+                return None  # Don't calculate P/E for zero earnings
             current_price = stock.history(period='1d')['Close'].iloc[-1]
-            pe = current_price / latest_eps if latest_eps != 0 else None
-        else:
-            pe = float(overview.get('PERatio', 0)) or None
+            return current_price / latest_eps  # Will be negative if eps is negative
+        return None
+    except Exception as e:
+        logger.error(f"Error calculating P/E ratio: {e}")
+        return None
 
-        # Get P/B from Alpha Vantage if needed
-        pb = float(overview.get('PriceToBookRatio', 0)) or None
+def calculate_pe_pb_combo(pe: Optional[float], pb: Optional[float]) -> Optional[float]:
+    """Calculate P/E×P/B combo with negative values for negative P/E"""
+    try:
+        if pe is not None and pb is not None:
+            return pe * pb  # Will be negative if P/E is negative
+        return None
+    except Exception as e:
+        logger.error(f"Error calculating P/E×P/B combo: {e}")
+        return None
+
+def calculate_fcf_yield(sec_data: Dict, market_cap: float) -> Optional[float]:
+    """Calculate FCF yield with better error handling"""
+    try:
+        if not all(k in sec_data for k in ['operatingCashFlow', 'capitalExpenditures']):
+            return None
+            
+        cfo = sec_data['operatingCashFlow']
+        capex = abs(sec_data['capitalExpenditures']) if sec_data['capitalExpenditures'] else 0
+        fcf = cfo - capex
         
-        # Calculate market cap using shares outstanding from SEC
+        if market_cap <= 0:
+            return None
+            
+        fcf_yield = (fcf / market_cap) * 100
+        return fcf_yield if fcf_yield > -100 else None  # Cap extreme negative values
+    except Exception as e:
+        logger.error(f"Error calculating FCF yield: {e}")
+        return None
+
+def calculate_earnings_growth(eps_df: pd.DataFrame) -> Optional[float]:
+    """Calculate earnings growth with better handling of data quality"""
+    try:
+        if eps_df is None or len(eps_df) < 2:
+            return None
+            
+        eps_df = eps_df.sort_values('date', ascending=False)
+        newest = eps_df.iloc[0]['eps']
+        oldest = eps_df.iloc[-1]['eps']
+        
+        if newest <= 0 or oldest <= 0:
+            return None  # Don't calculate growth with negative earnings
+            
+        years_diff = (eps_df.iloc[0]['date'] - eps_df.iloc[-1]['date']).days / 365.25
+        if years_diff < 1:
+            return None  # Need at least 1 year of data
+            
+        growth = (((newest / oldest) ** (1/years_diff)) - 1) * 100
+        return growth if abs(growth) < 1000 else None  # Cap extreme growth rates
+    except Exception as e:
+        logger.error(f"Error calculating earnings growth: {e}")
+        return None
+
+def calculate_pb_ratio(sec_data: Dict, market_cap: float) -> Optional[float]:
+    """Calculate P/B ratio with better error handling"""
+    try:
+        if not all(k in sec_data for k in ['totalAssets', 'totalLiabilities']):
+            return None
+            
+        total_assets = float(sec_data['totalAssets'])
+        total_liabilities = float(sec_data['totalLiabilities'])
+        book_value = total_assets - total_liabilities
+        
+        if book_value <= 0 or market_cap <= 0:
+            return None
+            
+        return market_cap / book_value
+    except Exception as e:
+        logger.error(f"Error calculating P/B ratio: {e}")
+        return None
+
+def calculate_balance_sheet_ratio(sec_data: Dict) -> Optional[float]:
+    """Calculate balance sheet ratio with better error handling"""
+    try:
+        if not all(k in sec_data for k in ['totalAssets', 'totalLiabilities']):
+            return None
+            
+        total_assets = float(sec_data['totalAssets'])
+        total_liabilities = float(sec_data['totalLiabilities'])
+        
+        if total_liabilities <= 0:
+            return None
+            
+        ratio = total_assets / total_liabilities
+        logger.debug(f"Balance sheet ratio calculation: {total_assets} / {total_liabilities} = {ratio}")
+        return ratio
+    except Exception as e:
+        logger.error(f"Error calculating balance sheet ratio: {e}")
+        return None
+
+def modern_graham_screen(ticker: str, use_local: bool = False) -> Optional[Dict[str, Any]]:
+    """Screen a stock using Graham's criteria with SEC EDGAR data"""
+    try:
+        if use_local:
+            data = load_stock_data()
+            if ticker in data:
+                stored_data = data[ticker]
+                if stored_data and not any(stored_data.get(field) is None for field in 
+                                         ["Balance Sheet Ratio", "FCF Yield (%)", "ROIC (%)", "10Y Earnings Growth (%)"]):
+                    return stored_data
+                logger.debug(f"No valid data found for {ticker}")
+                return None
+
+        # Initialize clients
+        edgar_client = EdgarClient()
+        av_client = AlphaVantageClient(SETTINGS['ALPHA_VANTAGE_KEY'])
+        
+        # Get data
+        sec_data = edgar_client.get_financial_data(edgar_client.get_cik(ticker), 'NetIncomeLoss')
+        if not validate_sec_data(sec_data):
+            logger.warning(f"Incomplete or invalid SEC data for {ticker}")
+            return None
+            
+        overview = av_client.get_overview(ticker)
+        stock = yf.Ticker(ticker)
+        
+        # Calculate metrics
+        eps_df = edgar_client.get_historical_eps(ticker)
+        pe = calculate_pe_ratio(stock, eps_df)
+        
+        # Calculate market cap
         if 'sharesOutstanding' in sec_data:
             shares = sec_data['sharesOutstanding']
-            stock = yf.Ticker(ticker)
             price = stock.history(period='1d')['Close'].iloc[-1]
             market_cap = shares * price
         else:
             market_cap = float(overview.get('MarketCapitalization', 0)) or None
 
-        # Get revenue
-        revenue = sec_data.get('revenue') or (float(income_stmt.iloc[0]['totalRevenue']) if not income_stmt.empty else None)
-
-        # P/E × P/B
-        pe_pb_combo = pe * pb if pe and pb else None
-
-        # FCF Yield = (CFO - CapEx) / Market Cap
-        if 'operatingCashFlow' in sec_data and 'capitalExpenditures' in sec_data and market_cap:
-            cfo = sec_data['operatingCashFlow']
-            capex = abs(sec_data['capitalExpenditures'])
-            fcf = cfo - capex
-            fcf_yield = (fcf / market_cap) * 100
-        elif not cash_flow.empty and market_cap:
-            cfo = float(cash_flow.iloc[0]['operatingCashflow'])
-            capex = abs(float(cash_flow.iloc[0]['capitalExpenditures']))
-            fcf = cfo - capex
-            fcf_yield = (fcf / market_cap) * 100
-        else:
-            fcf_yield = None
-
-        # Balance sheet ratio from SEC data
-        if 'totalAssets' in sec_data and 'totalLiabilities' in sec_data:
-            total_assets = sec_data['totalAssets']
-            total_liabilities = sec_data['totalLiabilities']
-            balance_sheet_ratio = (total_assets / total_liabilities) if total_liabilities != 0 else None
-        elif not balance_sheet.empty:
-            total_assets = float(balance_sheet.iloc[0]['totalAssets'])
-            total_liabilities = float(balance_sheet.iloc[0]['totalLiabilities'])
-            balance_sheet_ratio = (total_assets / total_liabilities) if total_liabilities != 0 else None
-        else:
-            balance_sheet_ratio = None
-
-        # Additional criteria using SEC data when possible
-        roic = calculate_roic(income_stmt, balance_sheet)
-        earnings_growth = get_earnings_growth(ticker, edgar_client)
-        has_positive_earnings = all(float(eps['eps']) > 0 for eps in sec_data.get('historicalEPS', [])[:SETTINGS['POSITIVE_EARNINGS_YEARS']]) if 'historicalEPS' in sec_data else check_positive_earnings_streak(income_stmt, SETTINGS['POSITIVE_EARNINGS_YEARS'])
-        
-        # Check dividend history using yfinance
-        stock = yf.Ticker(ticker)
+        # Calculate other metrics
+        pb = calculate_pb_ratio(sec_data, market_cap)
+        pe_pb_combo = calculate_pe_pb_combo(pe, pb)
+        fcf_yield = calculate_fcf_yield(sec_data, market_cap)
+        roic = calculate_roic(sec_data, sec_data)
+        earnings_growth = calculate_earnings_growth(eps_df)
+        has_positive_earnings = check_positive_earnings_streak(sec_data)
         has_dividend_history = check_dividend_history(stock, SETTINGS['DIVIDEND_HISTORY_YEARS'])
 
-        # Store all the data
+        # Store results
         stock_data = {
             "Ticker": ticker,
             "P/E": pe,
             "P/B": pb,
             "P/E×P/B": pe_pb_combo,
-            "Balance Sheet Ratio": balance_sheet_ratio,
+            "Balance Sheet Ratio": calculate_balance_sheet_ratio(sec_data),
             "FCF Yield (%)": fcf_yield,
             "ROIC (%)": roic,
             "10Y Earnings Growth (%)": earnings_growth,
             "Has 8Y+ Positive Earnings": has_positive_earnings,
             "Has Required Dividend History": has_dividend_history,
             "Market Cap ($B)": market_cap / 1e9 if market_cap else None,
-            "Revenue ($B)": revenue / 1e9 if revenue else None,
+            "Revenue ($B)": sec_data.get('revenue', 0) / 1e9 if sec_data.get('revenue') else None,
             "Last Updated": datetime.datetime.now().isoformat(),
-            "Data Source": "SEC EDGAR" if sec_data else "Alpha Vantage"
+            "Data Source": "SEC EDGAR" if sec_data else "Alpha Vantage",
+            "cik": edgar_client.get_cik(ticker)  # Store the CIK
         }
 
-        # Log data validation results
-        failed_criteria = []
-        if pe and pe >= SETTINGS['PE_RATIO_MAX']:
-            failed_criteria.append(f"P/E ratio {pe:.1f} >= {SETTINGS['PE_RATIO_MAX']}")
-        if pe_pb_combo and pe_pb_combo > SETTINGS['PE_PB_COMBO_MAX']:
-            failed_criteria.append(f"P/E×P/B {pe_pb_combo:.1f} > {SETTINGS['PE_PB_COMBO_MAX']}")
-        if balance_sheet_ratio and balance_sheet_ratio < SETTINGS['BALANCE_SHEET_RATIO_MIN']:
-            failed_criteria.append(f"Balance sheet ratio {balance_sheet_ratio:.1f} < {SETTINGS['BALANCE_SHEET_RATIO_MIN']}")
-        if not has_positive_earnings:
-            failed_criteria.append("Missing 8+ years of positive earnings")
-        if fcf_yield and fcf_yield <= SETTINGS['FCF_YIELD_MIN']:
-            failed_criteria.append(f"FCF yield {fcf_yield:.1f}% <= {SETTINGS['FCF_YIELD_MIN']}%")
-        if roic and roic < SETTINGS['ROIC_MIN']:
-            failed_criteria.append(f"ROIC {roic:.1f}% < {SETTINGS['ROIC_MIN']}%")
-        if not has_dividend_history:
-            failed_criteria.append(f"No required dividend history")
-        if earnings_growth and earnings_growth < SETTINGS['EARNINGS_GROWTH_MIN']:
-            failed_criteria.append(f"10Y earnings growth {earnings_growth:.1f}% < {SETTINGS['EARNINGS_GROWTH_MIN']}%")
-
-        if failed_criteria:
-            logger.debug(f"{ticker} failed criteria: {'; '.join(failed_criteria)}")
-
-        # Check if stock meets all criteria
-        meets_criteria = all([
-            pe and pe < SETTINGS['PE_RATIO_MAX'],
-            pe_pb_combo and pe_pb_combo <= SETTINGS['PE_PB_COMBO_MAX'],
-            balance_sheet_ratio and balance_sheet_ratio >= SETTINGS['BALANCE_SHEET_RATIO_MIN'],
-            has_positive_earnings,
-            fcf_yield and fcf_yield > SETTINGS['FCF_YIELD_MIN'],
-            roic and roic >= SETTINGS['ROIC_MIN'],
-            has_dividend_history,
-            earnings_growth and earnings_growth >= SETTINGS['EARNINGS_GROWTH_MIN']
-        ])
-
-        stock_data["Meets All Criteria"] = meets_criteria
+        # Validate against criteria
+        stock_data["Meets All Criteria"] = validate_against_criteria(stock_data)
+        
         return stock_data
 
     except Exception as e:
         logger.error(f"Error processing {ticker}: {str(e)}")
         return None
 
+def validate_against_criteria(data: Dict) -> bool:
+    """Validate stock data against screening criteria"""
+    try:
+        return all([
+            data.get("P/E") and data["P/E"] < SETTINGS['PE_RATIO_MAX'],
+            data.get("P/E×P/B") and data["P/E×P/B"] <= SETTINGS['PE_PB_COMBO_MAX'],
+            data.get("Balance Sheet Ratio") and data["Balance Sheet Ratio"] >= SETTINGS['BALANCE_SHEET_RATIO_MIN'],
+            data.get("Has 8Y+ Positive Earnings", False),
+            data.get("FCF Yield (%)") and data["FCF Yield (%)"] > SETTINGS['FCF_YIELD_MIN'],
+            data.get("ROIC (%)") and data["ROIC (%)"] >= SETTINGS['ROIC_MIN'],
+            data.get("Has Required Dividend History", False),
+            data.get("10Y Earnings Growth (%)") and data["10Y Earnings Growth (%)"] >= SETTINGS['EARNINGS_GROWTH_MIN']
+        ])
+    except Exception as e:
+        logger.error(f"Error validating criteria: {e}")
+        return False
+
+def screen_stock(ticker: str) -> Dict[str, Any]:
+    """Screen a single stock for value metrics."""
+    try:
+        # Initialize clients
+        edgar_client = EdgarClient()
+        stock = yf.Ticker(ticker)
+        
+        # Get CIK
+        cik = edgar_client.get_cik(ticker)
+        if not cik:
+            logger.warning(f"No CIK found for {ticker}")
+            return {}
+
+        metrics = {}
+        
+        # 1. Net Income (historical data for growth and positive earnings check)
+        net_income_data = edgar_client.get_financial_data_with_alternatives(cik, 
+            ['NetIncomeLoss', 
+             'NetIncome', 
+             'ProfitLoss', 
+             'IncomeLossFromContinuingOperations',
+             'NetIncomeLossAvailableToCommonStockholdersBasic'])
+        
+        if net_income_data and 'units' in net_income_data:
+            # Get historical net income values
+            net_income_history = []
+            for unit_type in net_income_data['units']:
+                for entry in net_income_data['units'][unit_type]:
+                    if entry.get('form') == '10-K':
+                        net_income_history.append((entry['end'], entry['val']))
+            
+            # Sort by date
+            net_income_history.sort(key=lambda x: x[0], reverse=True)
+            
+            if net_income_history:
+                metrics['net_income'] = net_income_history[0][1]  # Latest
+                
+                # Count consecutive years of positive earnings from most recent
+                positive_years = 0
+                for _, val in net_income_history:
+                    if val > 0:
+                        positive_years += 1
+                    else:
+                        break  # Stop at first negative/zero earnings
+                metrics['Consecutive Positive Earnings Years'] = positive_years
+                
+                # Calculate 10Y earnings growth if enough data
+                if len(net_income_history) >= 10:
+                    latest = net_income_history[0][1]
+                    oldest = net_income_history[9][1]
+                    if oldest > 0:  # Avoid division by zero
+                        growth_rate = ((latest / oldest) ** (1/10) - 1) * 100
+                        metrics['10Y Earnings Growth (%)'] = growth_rate
+
+        # 2. Balance Sheet Data
+        assets_data = edgar_client.get_financial_data_with_alternatives(cik, 
+            ['Assets', 'TotalAssets', 'AssetsTotal'])
+        liabilities_data = edgar_client.get_financial_data_with_alternatives(cik,
+            ['Liabilities', 'TotalLiabilities', 'LiabilitiesTotal'])
+        
+        if assets_data and liabilities_data:
+            latest_assets = get_latest_annual_value(assets_data)
+            latest_liabilities = get_latest_annual_value(liabilities_data)
+            
+            if latest_assets and latest_liabilities:
+                metrics['total_assets'] = latest_assets
+                metrics['total_liabilities'] = latest_liabilities
+                
+                # Calculate Balance Sheet Ratio
+                if latest_assets > 0:
+                    metrics['Balance Sheet Ratio'] = latest_assets / latest_liabilities
+
+        # 3. Free Cash Flow data for FCF Yield
+        operating_cash_flow = edgar_client.get_financial_data_with_alternatives(cik,
+            ['NetCashProvidedByUsedInOperatingActivities', 
+             'OperatingCashFlow',
+             'CashFlowFromOperations',
+             'NetCashProvidedByOperatingActivities',
+             'CashFlowsFromUsedInOperatingActivities'])
+        
+        capex = edgar_client.get_financial_data_with_alternatives(cik,
+            ['PaymentsToAcquirePropertyPlantAndEquipment',
+             'CapitalExpenditures',
+             'PaymentsForPropertyPlantAndEquipment',
+             'InvestmentsInPropertyPlantAndEquipment',
+             'CapitalExpendituresIncurredButNotYetPaid',
+             'PaymentsToAcquireProductiveAssets'])
+
+        # For financial companies, try alternative cash flow metrics
+        if not operating_cash_flow or not capex:
+            sector_metrics = edgar_client.get_sector_specific_metrics(cik, ticker)
+            if sector_metrics:
+                # For financial companies, use change in cash and investments as proxy for FCF
+                cash_and_investments = edgar_client.get_financial_data_with_alternatives(cik,
+                    ['CashAndCashEquivalentsAtCarryingValue',
+                     'CashAndShortTermInvestments',
+                     'MarketableSecurities'])
+                if cash_and_investments:
+                    latest_cash = get_latest_annual_value(cash_and_investments)
+                    if latest_cash is not None:
+                        # Use change in cash position as proxy for FCF
+                        fcf = latest_cash - (sector_metrics.get('NoninterestExpense', 0) or 0)
+                        
+                        try:
+                            info = stock.info
+                            market_cap = info.get('marketCap')
+                            if market_cap and market_cap > 0:
+                                metrics['FCF Yield (%)'] = (fcf / market_cap) * 100
+                        except Exception as e:
+                            logger.error(f"Error calculating FCF yield for {ticker}: {e}")
+        else:
+            latest_ocf = get_latest_annual_value(operating_cash_flow)
+            latest_capex = get_latest_annual_value(capex)
+            
+            if latest_ocf and latest_capex:
+                fcf = latest_ocf - abs(latest_capex)
+                try:
+                    info = stock.info
+                    market_cap = info.get('marketCap')
+                    if market_cap and market_cap > 0:
+                        metrics['FCF Yield (%)'] = (fcf / market_cap) * 100
+                        
+                        # Also calculate P/E since we have market cap
+                        if metrics.get('net_income') and metrics['net_income'] > 0:
+                            metrics['P/E'] = market_cap / metrics['net_income']
+                except Exception as e:
+                    logger.error(f"Error getting market data for {ticker}: {e}")
+
+        # 4. Book Value for P/B ratio
+        if 'total_assets' in metrics and 'total_liabilities' in metrics:
+            book_value = metrics['total_assets'] - metrics['total_liabilities']
+            try:
+                info = stock.info
+                market_cap = info.get('marketCap')
+                if market_cap and market_cap > 0 and book_value > 0:
+                    metrics['P/B'] = market_cap / book_value
+                    if 'P/E' in metrics:
+                        metrics['P/E×P/B'] = metrics['P/E'] * metrics['P/B']
+            except Exception as e:
+                logger.error(f"Error calculating P/B ratio for {ticker}: {e}")
+
+        # 5. Calculate ROIC
+        try:
+            # For financial companies, use Return on Assets (ROA) as a proxy for ROIC
+            if 'total_assets' in metrics:
+                operating_income = edgar_client.get_financial_data_with_alternatives(cik,
+                    ['OperatingIncomeLoss', 
+                     'OperatingIncome', 
+                     'EBIT',
+                     'IncomeLossFromContinuingOperationsBeforeIncomeTaxes',
+                     'IncomeLossFromContinuingOperations',
+                     'OperatingIncomeLossIncludingIncomeLossFromEquityMethodInvestments',
+                     'InterestAndDividendIncomeOperating',  # Financial sector
+                     'NetInterestIncome'])  # Financial sector
+                
+                if operating_income:
+                    latest_operating_income = get_latest_annual_value(operating_income)
+                    
+                    # Estimate NOPAT (assuming 21% corporate tax rate)
+                    if latest_operating_income:
+                        nopat = latest_operating_income * (1 - 0.21)  # 21% corporate tax rate
+                        
+                        # For financial companies, use total assets as invested capital
+                        if ticker in ['MS', 'GS', 'JPM', 'BAC', 'C', 'WFC']:  # Financial sector
+                            invested_capital = metrics['total_assets']
+                        else:
+                            # Calculate Invested Capital
+                            current_liabilities = edgar_client.get_financial_data_with_alternatives(cik,
+                                ['LiabilitiesCurrent', 'CurrentLiabilities'])
+                            if current_liabilities:
+                                latest_current_liabilities = get_latest_annual_value(current_liabilities)
+                                if latest_current_liabilities:
+                                    # Invested Capital = Total Assets - Current Liabilities
+                                    invested_capital = metrics['total_assets'] - latest_current_liabilities
+                                else:
+                                    invested_capital = metrics['total_assets'] - metrics['total_liabilities']
+                            else:
+                                invested_capital = metrics['total_assets'] - metrics['total_liabilities']
+                        
+                        if invested_capital > 0:
+                            metrics['ROIC (%)'] = (nopat / invested_capital) * 100
+                            logger.info(f"Calculated ROIC for {ticker}: {metrics['ROIC (%)']}%")
+        except Exception as e:
+            logger.error(f"Error calculating ROIC for {ticker}: {str(e)}")
+
+        # 6. Dividend History
+        try:
+            dividends = stock.dividends
+            if not dividends.empty:
+                yearly_dividends = dividends.groupby(dividends.index.year).sum()
+                # Count years with positive dividends
+                positive_div_years = sum(1 for d in yearly_dividends if d > 0)
+                metrics['Positive Dividend Years'] = positive_div_years
+                
+                # Also include consecutive years of dividends
+                consecutive_years = 0
+                for div in reversed(yearly_dividends.values):  # Start from most recent
+                    if div > 0:
+                        consecutive_years += 1
+                    else:
+                        break
+                metrics['Consecutive Dividend Years'] = consecutive_years
+            else:
+                metrics['Positive Dividend Years'] = 0
+                metrics['Consecutive Dividend Years'] = 0
+        except Exception as e:
+            logger.error(f"Error checking dividend history for {ticker}: {str(e)}")
+            metrics['Positive Dividend Years'] = 0
+            metrics['Consecutive Dividend Years'] = 0
+
+        return metrics
+
+    except Exception as e:
+        logger.error(f"Error screening {ticker}: {str(e)}")
+        return {}
+
+def get_latest_annual_value(data: Dict) -> Optional[float]:
+    """Extract the latest annual value from SEC API response."""
+    try:
+        values = []
+        for unit_type in data['units']:  # Usually 'USD'
+            for entry in data['units'][unit_type]:
+                if entry.get('form') == '10-K':  # Only consider annual reports
+                    values.append((entry['end'], entry['val']))
+        
+        if values:
+            # Sort by date and get most recent value
+            latest = sorted(values, key=lambda x: x[0], reverse=True)[0]
+            return latest[1]
+        return None
+    except Exception as e:
+        logger.error(f"Error getting latest value: {str(e)}")
+        return None
+
 def main():
     parser = argparse.ArgumentParser(description='Value Stock Screener')
-    parser.add_argument('--local', action='store_true', 
-                       help='Use only locally stored data without fetching missing values')
-    parser.add_argument('--debug', action='store_true', 
-                       help='Enable debug logging')
-    parser.add_argument('--update', nargs='*', 
-                       help='Update data for specific tickers or all if none specified')
-    parser.add_argument('--max-age', type=int, 
-                       help='Maximum age of data in days before requiring refresh')
+    parser.add_argument('--output', type=str, default='screener_results.json',
+                       help='Output JSON file path')
     args = parser.parse_args()
 
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
+    # Get S&P 500 tickers
+    tickers = get_sp500_tickers()
+    logger.info(f"Retrieved {len(tickers)} tickers from S&P 500")
 
-    # Test with just PFE
-    stored_data = load_stock_data()
-    tickers = ['PFE']
-    
-    results = []
-    all_data = stored_data.copy()
-    
-    print(f"Screening {len(tickers)} stocks...")
-    
-    # Process tickers
+    # Screen each stock
+    results = {}
     for ticker in tickers:
+        logger.info(f"Screening {ticker}...")
+        metrics = screen_stock(ticker)
+        if metrics:  # Only include stocks with data
+            results[ticker] = metrics
+
+    # Calculate derived metrics
+    for ticker, metrics in results.items():
         try:
-            if args.local and ticker not in stored_data:
-                logger.warning(f"No local data found for {ticker}")
-                continue
-                
-            result = modern_graham_screen(ticker, args.local)
-            if result:
-                results.append(result)
-                all_data[ticker] = result
-            print(f"Processed {ticker}", end='\r')
+            # Remove the duplicate ROIC calculation here since it's now handled in screen_stock
+            pass
         except Exception as e:
-            logger.error(f"Error processing {ticker}: {str(e)}")
-            continue
-    
-    if not args.local or args.update is not None:
-        save_stock_data(all_data)
-    
-    # Create DataFrame and filter for stocks that meet all criteria
-    df = pd.DataFrame(results)
-    print("\nResults for PFE:")
-    if len(df) > 0:
-        print(df.to_string(index=False))
-    else:
-        print("No data found for PFE")
-    
-    if args.debug or args.update is not None:
-        print("\nData saved in:", DATA_FILE)
+            logger.error(f"Error calculating metrics for {ticker}: {str(e)}")
+
+    # Save results
+    with open(args.output, 'w') as f:
+        json.dump(results, f, indent=2)
+
+    logger.info(f"Screening complete. Processed {len(tickers)} stocks, found data for {len(results)} stocks.")
+    logger.info(f"Results saved to {args.output}")
 
 if __name__ == "__main__":
     main()
