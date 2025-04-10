@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-__version__ = '1.0.4'
+__version__ = '1.0.5'
 
 import yfinance as yf
 import pandas as pd
@@ -554,25 +554,51 @@ def check_positive_earnings_streak(sec_data, years=8):
         return False
 
 def check_dividend_history(stock, years=20):
-    """Check if dividends have been paid uninterrupted for specified years"""
+    """Check if dividends have been paid uninterrupted for specified years AND are currently active"""
     try:
         dividends = stock.dividends
-        if dividends.empty:
-            return False
+        # First check if dividends exist at all
+        if dividends is None or len(dividends) == 0 or dividends.empty:
+            return False, False  # No dividends at all, and not currently paying
             
+        # Verify there's actual dividend data 
+        if dividends.sum() <= 0:
+            return False, False
+        
         current_year = date.today().year
         earliest_year = dividends.index[0].year
         
-        if current_year - earliest_year < years:
-            return False
-            
+        # Group dividends by year to check for consistency
         yearly_dividends = dividends.groupby(dividends.index.year).sum()
-        recent_years = yearly_dividends[-years:]
         
-        return len(recent_years) >= years and all(d > 0 for d in recent_years)
+        # Check if there are dividends in current or previous year (still active)
+        currently_pays = (current_year in yearly_dividends.index or 
+                         (current_year - 1) in yearly_dividends.index)
+            
+        # Now check historical consistency (separate from current payment status)
+        if current_year - earliest_year < years:
+            return False, currently_pays
+            
+        # Get the most recent years needed for our check
+        recent_years = sorted(yearly_dividends.index)[-years:]
+        
+        # Make sure we have enough years with dividends
+        if len(recent_years) < years:
+            return False, currently_pays
+        
+        # Verify there are no gaps in the dividend history
+        for i in range(1, len(recent_years)):
+            if recent_years[i] != recent_years[i-1] + 1:
+                return False, currently_pays
+                
+        # All dividends must be positive
+        all_positive = all(yearly_dividends[year] > 0 for year in recent_years)
+        
+        # Return both conditions separately so we can track them
+        return all_positive, currently_pays
     except Exception as e:
         logger.debug(f"Error checking dividend history: {e}")
-        return False
+        return False, False
 
 def calculate_roic(sec_data, _):
     """Calculate Return on Invested Capital"""
@@ -599,7 +625,7 @@ def calculate_roic(sec_data, _):
                 
         return None
     except Exception as e:
-        logger.debug(f"Error calculating ROIC: {e}")
+        logger.debug(f"Error calculating ROIC: e")
         return None
 
 def validate_sec_data(sec_data: Dict) -> bool:
@@ -761,7 +787,7 @@ def modern_value_screen(ticker: str, use_local: bool = False) -> Optional[Dict[s
         roic = calculate_roic(sec_data, sec_data)
         earnings_growth = calculate_earnings_growth(eps_df)
         has_positive_earnings = check_positive_earnings_streak(sec_data)
-        has_dividend_history = check_dividend_history(stock, SETTINGS['DIVIDEND_HISTORY_YEARS'])
+        has_dividend_history, currently_pays_dividends = check_dividend_history(stock, SETTINGS['DIVIDEND_HISTORY_YEARS'])
 
         # Store results
         stock_data = {
@@ -775,6 +801,7 @@ def modern_value_screen(ticker: str, use_local: bool = False) -> Optional[Dict[s
             "10Y Earnings Growth (%)": earnings_growth,
             "Has 8Y+ Positive Earnings": has_positive_earnings,
             "Has Required Dividend History": has_dividend_history,
+            "Currently Pays Dividends": currently_pays_dividends,
             "Market Cap ($B)": market_cap / 1e9 if market_cap else None,
             "Revenue ($B)": sec_data.get('revenue', 0) / 1e9 if sec_data.get('revenue') else None,
             "Last Updated": datetime.datetime.now().isoformat(),
@@ -830,7 +857,9 @@ def validate_against_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, Lis
             (safe_compare(data.get("ROIC (%)"), lambda x, y: x >= y, SETTINGS['ROIC_MIN']),
              f"ROIC above {SETTINGS['ROIC_MIN']}%"),
             
-            (data.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
+            # Modified dividend criterion - MUST satisfy BOTH history AND currently pays
+            (data.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'] and 
+             data.get("Currently Pays Dividends", False) == True,
              f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends"),
             
             (safe_compare(data.get("10Y Earnings Growth (%)"), lambda x, y: x >= y, SETTINGS['EARNINGS_GROWTH_MIN']),
@@ -1012,13 +1041,21 @@ def screen_stock(ticker: str) -> Dict[str, Any]:
                     else:
                         break
                 metrics['Consecutive Dividend Years'] = consecutive_years
+                
+                # Add check for current or recent dividend payments
+                current_year = date.today().year
+                currently_pays = (current_year in yearly_dividends.index or 
+                                 (current_year - 1) in yearly_dividends.index)
+                metrics['Currently Pays Dividends'] = currently_pays
             else:
                 metrics['Positive Dividend Years'] = 0
                 metrics['Consecutive Dividend Years'] = 0
+                metrics['Currently Pays Dividends'] = False
         except Exception as e:
             logger.error(f"Error checking dividend history for {ticker}: {str(e)}")
             metrics['Positive Dividend Years'] = 0
             metrics['Consecutive Dividend Years'] = 0
+            metrics['Currently Pays Dividends'] = False
 
         return metrics
 
@@ -1115,7 +1152,8 @@ def validate_cached_stock(ticker: str, cached_data: Dict[str, Any], verbosity: i
             (safe_compare(metrics.get("ROIC (%)"), lambda x, y: x >= y, SETTINGS['ROIC_MIN']),
              f"ROIC above {SETTINGS['ROIC_MIN']}%"),
             
-            (metrics.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
+            (metrics.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'] and 
+             metrics.get("Currently Pays Dividends", False) == True,
              f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends"),
             
             (safe_compare(metrics.get("10Y Earnings Growth (%)"), lambda x, y: x >= y, SETTINGS['EARNINGS_GROWTH_MIN']),
@@ -1197,11 +1235,6 @@ def analyze_criteria_stats(results: Dict[str, Any]):
     total_stocks = len(results)
     criteria_counts = []
     
-    for criteria_name, check_func in criteria:
-        count = sum(1 for ticker, data in results.items() if check_func(data))
-        criteria_counts.append((criteria_name, count, (count / total_stocks) * 100))
-    
-    # Sort criteria by success rate (descending)
     criteria_counts.sort(key=lambda x: x[1], reverse=True)
     
     # Display results
@@ -1510,7 +1543,8 @@ Note:
                     (safe_compare(metrics.get("ROIC (%)"), lambda x, y: x >= y, SETTINGS['ROIC_MIN']),
                      f"ROIC above {SETTINGS['ROIC_MIN']}%"),
                     
-                    (metrics.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
+                    (metrics.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'] and 
+                     metrics.get("Currently Pays Dividends", False) == True,
                      f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends"),
                     
                     (safe_compare(metrics.get("10Y Earnings Growth (%)"), lambda x, y: x >= y, SETTINGS['EARNINGS_GROWTH_MIN']),
