@@ -1162,18 +1162,94 @@ def validate_cached_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, List
         logger.error(f"Error validating cached criteria: {e}")
         return False, []
 
+def analyze_criteria_stats(results: Dict[str, Any]):
+    """Analyze how many stocks meet each individual criterion."""
+    if not results:
+        print("No results to analyze.")
+        return
+    
+    # Define all criteria we want to check
+    criteria = [
+        ("P/E ratio below " + str(SETTINGS['PE_RATIO_MAX']), 
+         lambda data: isinstance(data.get("P/E"), (int, float)) and data["P/E"] < SETTINGS['PE_RATIO_MAX']),
+        
+        ("P/E×P/B below " + str(SETTINGS['PE_PB_COMBO_MAX']),
+         lambda data: isinstance(data.get("P/E×P/B"), (int, float)) and data["P/E×P/B"] <= SETTINGS['PE_PB_COMBO_MAX']),
+        
+        ("Balance Sheet Ratio above " + str(SETTINGS['BALANCE_SHEET_RATIO_MIN']),
+         lambda data: isinstance(data.get("Balance Sheet Ratio"), (int, float)) and data["Balance Sheet Ratio"] >= SETTINGS['BALANCE_SHEET_RATIO_MIN']),
+        
+        (f"At least {SETTINGS['POSITIVE_EARNINGS_YEARS']} years of positive earnings",
+         lambda data: data.get("Consecutive Positive Earnings Years", 0) >= SETTINGS['POSITIVE_EARNINGS_YEARS']),
+        
+        (f"FCF Yield above {SETTINGS['FCF_YIELD_MIN']}%",
+         lambda data: isinstance(data.get("FCF Yield (%)"), (int, float)) and data["FCF Yield (%)"] > SETTINGS['FCF_YIELD_MIN']),
+        
+        (f"ROIC above {SETTINGS['ROIC_MIN']}%",
+         lambda data: isinstance(data.get("ROIC (%)"), (int, float)) and data["ROIC (%)"] >= SETTINGS['ROIC_MIN']),
+        
+        (f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends",
+         lambda data: data.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS']),
+        
+        (f"10Y Earnings Growth above {SETTINGS['EARNINGS_GROWTH_MIN']}%",
+         lambda data: isinstance(data.get("10Y Earnings Growth (%)"), (int, float)) and data["10Y Earnings Growth (%)"] >= SETTINGS['EARNINGS_GROWTH_MIN'])
+    ]
+    
+    # Count how many stocks meet each criterion
+    total_stocks = len(results)
+    criteria_counts = []
+    
+    for criteria_name, check_func in criteria:
+        count = sum(1 for ticker, data in results.items() if check_func(data))
+        criteria_counts.append((criteria_name, count, (count / total_stocks) * 100))
+    
+    # Sort criteria by success rate (descending)
+    criteria_counts.sort(key=lambda x: x[1], reverse=True)
+    
+    # Display results
+    print("\n===== CRITERIA ANALYSIS =====")
+    print(f"Total stocks analyzed: {total_stocks}")
+    print("\nNumber of stocks meeting each criterion (sorted by most common):")
+    print("=" * 80)
+    print(f"{'CRITERION':<50} {'COUNT':>8} {'PERCENTAGE':>12}")
+    print("-" * 80)
+    for name, count, percentage in criteria_counts:
+        print(f"{name:<50} {count:>8} {percentage:>11.1f}%")
+    print("=" * 80)
+    
+    # Show which criteria are the most challenging (least frequently met)
+    print("\nMost challenging criteria (least frequently met):")
+    most_challenging = sorted(criteria_counts, key=lambda x: x[1])[:3]
+    for i, (name, count, percentage) in enumerate(most_challenging):
+        print(f"{i+1}. {name}: {count} stocks ({percentage:.1f}%)")
+
 def main():
-    parser = argparse.ArgumentParser(description='Value Stock Screener - Screen stocks using Graham value investing principles')
+    parser = argparse.ArgumentParser(
+        description='Value Stock Screener - Screen stocks using Graham value investing principles',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Examples:
+  python value_screener.py                   # Screen all stocks using cached data if available
+  python value_screener.py --test 10         # Screen only 10 stocks (for testing)
+  python value_screener.py --forceupdate     # Force refresh of all stock data
+  python value_screener.py -v                # Show summary for each stock
+  python value_screener.py -vv               # Show detailed criteria for each stock
+  python value_screener.py --checkcriteria   # Analyze which criteria are most often met
+'''
+    )
     parser.add_argument('--output', type=str, default='screener_results.csv',
-                       help='Output file path (CSV format)')
+                      help='Output file path for results (CSV format, default: screener_results.csv)')
     parser.add_argument('--forceupdate', action='store_true',
-                       help='Force update of stock data instead of using cached data')
+                      help='Force update of all stock data instead of using cached data')
     parser.add_argument('--test', type=int, default=0,
-                       help='Run with a limited number of tickers (for testing)')
+                      help='Run with a limited number of tickers (for testing). Example: --test 10')
     parser.add_argument('-v', action='count', default=0,
-                       help='Verbosity level (-v for summary, -vv for detailed criteria)')
+                      help='Verbosity level (-v: show summary for each stock, -vv: show detailed criteria)')
     parser.add_argument('--version', action='version',
-                       version=f'Value Stock Screener v{__version__}')
+                      version=f'Value Stock Screener v{__version__}',
+                      help='Show the version number and exit')
+    parser.add_argument('--checkcriteria', action='store_true',
+                      help='Analyze which criteria are most often met by stocks instead of showing passing stocks')
     args = parser.parse_args()
 
     results = {}
@@ -1249,6 +1325,7 @@ def main():
     def process_cached_ticker(ticker):
         """Process a ticker using cached data only - no API calls"""
         if args.v == 0:
+            # Always show progress, even in checkcriteria mode
             print(f"Validating cached data for {ticker}...")
             
         # Use the cached data without making external API calls
@@ -1258,6 +1335,7 @@ def main():
     def process_new_ticker(ticker):
         """Process a ticker by fetching fresh data from APIs"""
         if args.v == 0:
+            # Always show progress, even in checkcriteria mode
             print(f"Screening {ticker}...")
             logger.info(f"Screening {ticker}...")
         
@@ -1322,53 +1400,60 @@ def main():
 
     # Always process and save results
     if results:
-        # Save both JSON and CSV formats
+        # Save both JSON and CSV formats - always do this regardless of mode
         save_stock_data(results)  # Save JSON for caching
-        save_results_csv(results, args.output)  # Save CSV for user
-    
-    print("\n===== RESULTS =====")  # Always show results header with direct print
-    
-    # Always display results based on verbosity level
-    passing_stocks = []
-    for ticker, metrics in results.items():
-        if isinstance(metrics, dict) and metrics.get('Meets All Criteria', False):
-            passing_stocks.append(ticker)
-    
-    # Sort passing stocks alphabetically for consistent output
-    passing_stocks.sort()
-    
-    if args.v == 0:  # Standard output mode
-        msg = f"Screening complete. Found data for {len(results)} stocks."
-        print(msg)
-        logger.info(msg)
         
-        msg = f"{len(passing_stocks)} stocks meet all Graham value criteria."
-        print(msg)
-        logger.info(msg)
+        # Only save CSV in regular mode (not in checkcriteria mode)
+        if not args.checkcriteria:
+            save_results_csv(results, args.output)  # Save CSV for user
+    
+    if args.checkcriteria:
+        # Special output mode that just counts how many stocks meet each criteria
+        analyze_criteria_stats(results)
+    else:
+        print("\n===== RESULTS =====")  # Always show results header with direct print
         
-        if passing_stocks:
-            msg = f"Passing stocks: {', '.join(passing_stocks)}"
+        # Always display results based on verbosity level
+        passing_stocks = []
+        for ticker, metrics in results.items():
+            if isinstance(metrics, dict) and metrics.get('Meets All Criteria', False):
+                passing_stocks.append(ticker)
+        
+        # Sort passing stocks alphabetically for consistent output
+        passing_stocks.sort()
+        
+        if args.v == 0:  # Standard output mode
+            msg = f"Screening complete. Found data for {len(results)} stocks."
             print(msg)
             logger.info(msg)
-    elif args.v == 1:  # Simple summary mode
-        msg = f"Screening complete. Found data for {len(results)} stocks."
-        print(msg)
-        
-        # We've already displayed criteria for each stock during processing,
-        # so just show a summary count of passing stocks
-        print(f"{len(passing_stocks)} stocks meet all Graham value criteria.")
-        if passing_stocks:
-            print(f"Passing stocks: {', '.join(passing_stocks)}")
-    elif args.v >= 2:  # Detailed criteria mode
-        msg = f"Screening complete. Found data for {len(results)} stocks."
-        print(msg)
-        logger.info(msg)
-        
-        # We've already displayed detailed criteria for each stock during processing,
-        # so just show a summary count of passing stocks
-        print(f"{len(passing_stocks)} stocks meet all Graham value criteria.")
-        if passing_stocks:
-            print(f"Passing stocks: {', '.join(passing_stocks)}")
+            
+            msg = f"{len(passing_stocks)} stocks meet all Graham value criteria."
+            print(msg)
+            logger.info(msg)
+            
+            if passing_stocks:
+                msg = f"Passing stocks: {', '.join(passing_stocks)}"
+                print(msg)
+                logger.info(msg)
+        elif args.v == 1:  # Simple summary mode
+            msg = f"Screening complete. Found data for {len(results)} stocks."
+            print(msg)
+            
+            # We've already displayed criteria for each stock during processing,
+            # so just show a summary count of passing stocks
+            print(f"{len(passing_stocks)} stocks meet all Graham value criteria.")
+            if passing_stocks:
+                print(f"Passing stocks: {', '.join(passing_stocks)}")
+        elif args.v >= 2:  # Detailed criteria mode
+            msg = f"Screening complete. Found data for {len(results)} stocks."
+            print(msg)
+            logger.info(msg)
+            
+            # We've already displayed detailed criteria for each stock during processing,
+            # so just show a summary count of passing stocks
+            print(f"{len(passing_stocks)} stocks meet all Graham value criteria.")
+            if passing_stocks:
+                print(f"Passing stocks: {', '.join(passing_stocks)}")
 
 if __name__ == "__main__":
     main()
