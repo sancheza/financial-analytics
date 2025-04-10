@@ -271,7 +271,7 @@ SETTINGS = {
     'FCF_YIELD_MIN': 5,           # Default: 8%
     'ROIC_MIN': 10,               # Default: 10%
     'DIVIDEND_HISTORY_YEARS': 5,  # Default: 10
-    'EARNINGS_GROWTH_MIN': 33,     # Default: 33%
+    'EARNINGS_GROWTH_MIN': 5,     # Default: 33%
     'REQUEST_DELAY': 2,           # Delay between API requests in seconds
     'DATA_MAX_AGE_DAYS': 7,        # Maximum age of data before requiring refresh
     'ALPHA_VANTAGE_KEY': 'MBSVCBG83NNOZ197'  # Alpha Vantage API key
