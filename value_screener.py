@@ -274,7 +274,7 @@ SETTINGS = {
     'EARNINGS_GROWTH_MIN': 5,     # Default: 33%
     'REQUEST_DELAY': 2,           # Delay between API requests in seconds
     'DATA_MAX_AGE_DAYS': 7,        # Maximum age of data before requiring refresh
-    'ALPHA_VANTAGE_KEY': 'MBSVCBG83NNOZ197'  # Alpha Vantage API key
+    'ALPHA_VANTAGE_KEY': os.environ.get('ALPHA_VANTAGE_KEY', '')  # Get API key from environment variable
 }
 
 # Define data directory and file paths
@@ -364,7 +364,7 @@ def load_stock_data() -> Dict[str, Any]:
                                 ticker_data[ticker] = row.drop('Ticker').to_dict()
             
             except Exception as e:
-                logger.error(f"Error converting data to DataFrame: {e}")
+                logger.error(f"Error converting data to DataFrame: e")
                 # Fall back to regular JSON loading if DataFrame approach fails
                 with open(DATA_FILE, 'r') as f:
                     data = json.load(f)
@@ -849,7 +849,8 @@ def validate_against_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, Lis
         if verbosity >= 2:  # -vv mode: show detailed criteria with extra line spacing
             ticker = data.get('Ticker', 'Unknown')
             print(f"\n{ticker} - Met {met_count}/{total_criteria} criteria:")
-            for i, (met, desc) in enumerate(criteria_results):
+            # Print each criterion on a separate line with proper check/x mark
+            for met, desc in criteria_results:
                 if met:
                     print(f"✓ {desc}")
                 else:
@@ -1063,82 +1064,68 @@ def save_results_csv(results: Dict[str, Any], filepath: str):
         df.to_csv(filepath, index=False)
         logger.info(f"Results saved to {filepath}")
     except Exception as e:
-        logger.error(f"Error saving results to CSV: {e}")
+        logger.error(f"Error saving results to CSV: e")
 
 def validate_cached_stock(ticker: str, cached_data: Dict[str, Any], verbosity: int = 0) -> Dict[str, Any]:
     """Validate cached stock data without making external API calls.
     This function is used to evaluate cached data against criteria without 
     fetching fresh data from APIs like Yahoo Finance.
     """
-    metrics = cached_data.copy()
-    metrics['Ticker'] = ticker  # Ensure ticker is in the metrics
+    # Create a clean copy of cached data and ensure ticker is included
+    metrics = cached_data.copy() if isinstance(cached_data, dict) else {}
+    metrics['Ticker'] = ticker
     
-    # Use a custom validate function that doesn't make external calls
-    meets_criteria, met_criteria = validate_cached_criteria(metrics, verbosity)
-    metrics['Meets All Criteria'] = meets_criteria
-    metrics['Met Criteria Count'] = len(met_criteria)
-    metrics['Met Criteria'] = met_criteria
-    
-    # Show real-time results for higher verbosity levels
-    if verbosity == 1:
-        # Show summary for each stock as it's processed
-        total_criteria = 8  # Total number of criteria
-        print(f"{ticker}: {len(met_criteria)} of {total_criteria} value criteria met")
-    # For -vv, the detailed output is handled by validate_cached_criteria
-    
-    return metrics
-
-def validate_cached_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, List[str]]:
-    """Validate stock data against screening criteria without making API calls.
-    Pure function that only uses the provided data and doesn't access external resources.
-    """
-    try:
-        # Function to safely compare numeric values, handling complex numbers
-        def safe_compare(value, compare_fn, threshold):
-            if value is None:
-                return False
-            if isinstance(value, complex):
-                # For complex numbers, use only the real part for comparison
-                try:
-                    return compare_fn(value.real, threshold)
-                except:
-                    return False
-            elif not isinstance(value, (int, float)):
-                return False
+    # Define safe_compare here to ensure it's available within this function
+    def safe_compare(value, compare_fn, threshold):
+        if value is None:
+            return False
+        if isinstance(value, complex):
+            # For complex numbers, use only the real part for comparison
             try:
-                return compare_fn(value, threshold)
+                return compare_fn(value.real, threshold)
             except:
                 return False
-
+        elif not isinstance(value, (int, float)):
+            return False
+        try:
+            return compare_fn(value, threshold)
+        except:
+            return False
+            
+    # Use our own validation logic here instead of calling validate_cached_criteria
+    # This ensures we have complete control over the validation process
+    try:
+        # Define the exact 8 criteria to evaluate in a fixed order
         criteria_results = [
-            (safe_compare(data.get("P/E"), lambda x, y: x < y, SETTINGS['PE_RATIO_MAX']),
+            (safe_compare(metrics.get("P/E"), lambda x, y: x < y, SETTINGS['PE_RATIO_MAX']),
              f"P/E ratio below {SETTINGS['PE_RATIO_MAX']}"),
             
-            (safe_compare(data.get("P/E×P/B"), lambda x, y: x <= y, SETTINGS['PE_PB_COMBO_MAX']),
+            (safe_compare(metrics.get("P/E×P/B"), lambda x, y: x <= y, SETTINGS['PE_PB_COMBO_MAX']),
              f"P/E×P/B below {SETTINGS['PE_PB_COMBO_MAX']}"),
             
-            (safe_compare(data.get("Balance Sheet Ratio"), lambda x, y: x >= y, SETTINGS['BALANCE_SHEET_RATIO_MIN']),
+            (safe_compare(metrics.get("Balance Sheet Ratio"), lambda x, y: x >= y, SETTINGS['BALANCE_SHEET_RATIO_MIN']),
              f"Balance Sheet Ratio above {SETTINGS['BALANCE_SHEET_RATIO_MIN']}"),
             
-            (data.get("Consecutive Positive Earnings Years", 0) >= SETTINGS['POSITIVE_EARNINGS_YEARS'],
+            (metrics.get("Consecutive Positive Earnings Years", 0) >= SETTINGS['POSITIVE_EARNINGS_YEARS'],
              f"At least {SETTINGS['POSITIVE_EARNINGS_YEARS']} years of positive earnings"),
             
-            (safe_compare(data.get("FCF Yield (%)"), lambda x, y: x > y, SETTINGS['FCF_YIELD_MIN']),
+            (safe_compare(metrics.get("FCF Yield (%)"), lambda x, y: x > y, SETTINGS['FCF_YIELD_MIN']),
              f"FCF Yield above {SETTINGS['FCF_YIELD_MIN']}%"),
             
-            (safe_compare(data.get("ROIC (%)"), lambda x, y: x >= y, SETTINGS['ROIC_MIN']),
+            (safe_compare(metrics.get("ROIC (%)"), lambda x, y: x >= y, SETTINGS['ROIC_MIN']),
              f"ROIC above {SETTINGS['ROIC_MIN']}%"),
             
-            (data.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
+            (metrics.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
              f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends"),
             
-            (safe_compare(data.get("10Y Earnings Growth (%)"), lambda x, y: x >= y, SETTINGS['EARNINGS_GROWTH_MIN']),
+            (safe_compare(metrics.get("10Y Earnings Growth (%)"), lambda x, y: x >= y, SETTINGS['EARNINGS_GROWTH_MIN']),
              f"10Y Earnings Growth above {SETTINGS['EARNINGS_GROWTH_MIN']}%")
         ]
         
-        # Get list of met criteria and count
+        # Count met criteria
         met_criteria_list = []
         met_count = 0
+        
         for met, desc in criteria_results:
             if met:
                 met_criteria_list.append(desc)
@@ -1146,21 +1133,32 @@ def validate_cached_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, List
                 
         total_criteria = len(criteria_results)
         
-        # Output based on verbosity level
-        if verbosity >= 2:  # -vv mode: show detailed criteria with extra line spacing
-            ticker = data.get('Ticker', 'Unknown')
-            print(f"\n{ticker} - Met {met_count}/{total_criteria} criteria:")
-            for i, (met, desc) in enumerate(criteria_results):
-                if met:
-                    print(f"✓ {desc}")
-                else:
-                    print(f"✗ {desc}")
-        
-        # Return whether all criteria are met and the list of met criteria
-        return met_count == total_criteria, met_criteria_list
+        # Store results
+        metrics['Meets All Criteria'] = met_count == total_criteria
+        metrics['Met Criteria Count'] = met_count
+        metrics['Met Criteria'] = met_criteria_list
+    
+        # Display output based on verbosity level
+        if verbosity >= 1:
+            if verbosity == 1:
+                # Simple one-line summary
+                print(f"{ticker}: {met_count} of {total_criteria} value criteria met")
+                
+            elif verbosity >= 2:
+                # Detailed view showing every criterion
+                print(f"\n{ticker} - Met {met_count}/{total_criteria} criteria:")
+                
+                # Print each criterion exactly once with appropriate mark
+                for met, desc in criteria_results:
+                    mark = "✓" if met else "✗"
+                    print(f"{mark} {desc}")
     except Exception as e:
-        logger.error(f"Error validating cached criteria: {e}")
-        return False, []
+        logger.error(f"Error validating criteria for {ticker}: {e}")
+        metrics['Meets All Criteria'] = False
+        metrics['Met Criteria Count'] = 0
+        metrics['Met Criteria'] = []
+    
+    return metrics
 
 def analyze_criteria_stats(results: Dict[str, Any]):
     """Analyze how many stocks meet each individual criterion."""
@@ -1359,6 +1357,14 @@ Examples:
   python value_screener.py --verbosity 2              # Show detailed criteria for each stock
   python value_screener.py --checkcriteria            # Analyze which criteria are most often met
   python value_screener.py --showcriteria             # Show detailed explanation of each criterion
+
+Note:
+  This script requires an Alpha Vantage API key to retrieve financial data.
+  Please create a .env file in the project root with your API key:
+  
+  ALPHA_VANTAGE_KEY=your_api_key_here
+  
+  Or set it as an environment variable before running the script.
 '''
     )
     parser.add_argument('--output', type=str, default='screener_results.csv',
@@ -1452,47 +1458,98 @@ Examples:
             # Force update mode - process all tickers
             tickers_to_update = tickers
 
-    # Process cached tickers without making external API calls
-    def process_cached_ticker(ticker):
-        """Process a ticker using cached data only - no API calls"""
-        if args.verbosity == 0:
-            # Always show progress, even in checkcriteria mode
-            print(f"Validating cached data for {ticker}...")
-            
-        # Use the cached data without making external API calls
-        return validate_cached_stock(ticker, stored_data[ticker], args.verbosity)
-    
-    # Screen stocks that need fresh data
-    def process_new_ticker(ticker):
-        """Process a ticker by fetching fresh data from APIs"""
-        if args.verbosity == 0:
-            # Always show progress, even in checkcriteria mode
-            print(f"Screening {ticker}...")
-            logger.info(f"Screening {ticker}...")
-        
-        metrics = screen_stock(ticker)
-        if metrics:  # Only include stocks with data
-            # Calculate criteria
-            meets_criteria, met_criteria = validate_against_criteria(metrics, args.verbosity)
-            metrics['Meets All Criteria'] = meets_criteria
-            metrics['Met Criteria Count'] = len(met_criteria)
-            metrics['Met Criteria'] = met_criteria
-            return metrics
-        return None
-
-    # Process cached tickers in parallel (no API calls)
+    # ===== MAJOR FIX: Process cached tickers WITHOUT threading to avoid output duplication =====
     if cached_tickers:
         print(f"Processing {len(cached_tickers)} cached tickers without API calls...")
-        with ThreadPoolExecutor() as executor:
-            futures = {executor.submit(process_cached_ticker, ticker): ticker for ticker in cached_tickers}
-            for future in futures:
-                ticker = futures[future]
-                try:
-                    metrics = future.result()
-                    if metrics:
-                        results[ticker] = metrics
-                except Exception as e:
-                    logger.error(f"Error processing cached ticker {ticker}: {e}")
+        results_from_cache = {}
+        
+        # Process each ticker one by one for reliable output
+        for ticker in cached_tickers:
+            try:
+                # Show progress
+                if args.verbosity == 0:
+                    print(f"Validating cached data for {ticker}...")
+                
+                # Use local validation function to avoid threading issues
+                # This is a simplified version of validate_cached_stock that doesn't do its own output
+                metrics = stored_data[ticker].copy() if isinstance(stored_data[ticker], dict) else {}
+                
+                # Helper function for safe comparisons
+                def safe_compare(value, compare_fn, threshold):
+                    if value is None:
+                        return False
+                    if isinstance(value, complex):
+                        try:
+                            return compare_fn(value.real, threshold)
+                        except:
+                            return False
+                    elif not isinstance(value, (int, float)):
+                        return False
+                    try:
+                        return compare_fn(value, threshold)
+                    except:
+                        return False
+                
+                # Evaluate criteria
+                criteria_results = [
+                    (safe_compare(metrics.get("P/E"), lambda x, y: x < y, SETTINGS['PE_RATIO_MAX']),
+                     f"P/E ratio below {SETTINGS['PE_RATIO_MAX']}"),
+                    
+                    (safe_compare(metrics.get("P/E×P/B"), lambda x, y: x <= y, SETTINGS['PE_PB_COMBO_MAX']),
+                     f"P/E×P/B below {SETTINGS['PE_PB_COMBO_MAX']}"),
+                    
+                    (safe_compare(metrics.get("Balance Sheet Ratio"), lambda x, y: x >= y, SETTINGS['BALANCE_SHEET_RATIO_MIN']),
+                     f"Balance Sheet Ratio above {SETTINGS['BALANCE_SHEET_RATIO_MIN']}"),
+                    
+                    (metrics.get("Consecutive Positive Earnings Years", 0) >= SETTINGS['POSITIVE_EARNINGS_YEARS'],
+                     f"At least {SETTINGS['POSITIVE_EARNINGS_YEARS']} years of positive earnings"),
+                    
+                    (safe_compare(metrics.get("FCF Yield (%)"), lambda x, y: x > y, SETTINGS['FCF_YIELD_MIN']),
+                     f"FCF Yield above {SETTINGS['FCF_YIELD_MIN']}%"),
+                    
+                    (safe_compare(metrics.get("ROIC (%)"), lambda x, y: x >= y, SETTINGS['ROIC_MIN']),
+                     f"ROIC above {SETTINGS['ROIC_MIN']}%"),
+                    
+                    (metrics.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
+                     f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends"),
+                    
+                    (safe_compare(metrics.get("10Y Earnings Growth (%)"), lambda x, y: x >= y, SETTINGS['EARNINGS_GROWTH_MIN']),
+                     f"10Y Earnings Growth above {SETTINGS['EARNINGS_GROWTH_MIN']}%")
+                ]
+                
+                # Count met criteria
+                met_criteria_list = []
+                met_count = 0
+                
+                for met, desc in criteria_results:
+                    if met:
+                        met_criteria_list.append(desc)
+                        met_count += 1
+                        
+                total_criteria = len(criteria_results)
+                
+                # Store results in metrics
+                metrics['Meets All Criteria'] = met_count == total_criteria
+                metrics['Met Criteria Count'] = met_count
+                metrics['Met Criteria'] = met_criteria_list
+                
+                # Display output based on verbosity level - now controlled at the loop level
+                if args.verbosity >= 1:
+                    if args.verbosity == 1:
+                        print(f"{ticker}: {met_count} of {total_criteria} value criteria met")
+                    elif args.verbosity >= 2:
+                        print(f"\n{ticker} - Met {met_count}/{total_criteria} criteria:")
+                        for met, desc in criteria_results:
+                            mark = "✓" if met else "✗"
+                            print(f"{mark} {desc}")
+                
+                # Add to results
+                results_from_cache[ticker] = metrics
+            except Exception as e:
+                logger.error(f"Error processing cached ticker {ticker}: {str(e)}")
+        
+        # Merge results
+        results.update(results_from_cache)
 
     # Process tickers that need updating (with API calls)
     if tickers_to_update:
@@ -1509,17 +1566,79 @@ Examples:
                 
                 # Submit this batch
                 for ticker in batch:
+                    # Using a modified process_new_ticker function that doesn't do its own output
+                    def process_new_ticker(ticker):
+                        if args.verbosity == 0:
+                            print(f"Screening {ticker}...")
+                            logger.info(f"Screening {ticker}...")
+                        
+                        metrics = screen_stock(ticker)
+                        if metrics:  # Only include stocks with data
+                            # Calculate criteria but don't output
+                            meets_criteria, met_criteria = validate_against_criteria(metrics, 0)  # Force verbosity=0
+                            metrics['Meets All Criteria'] = meets_criteria
+                            metrics['Met Criteria Count'] = len(met_criteria)
+                            metrics['Met Criteria'] = met_criteria
+                            return metrics
+                        return None
+                    
                     futures[executor.submit(process_new_ticker, ticker)] = ticker
                 
                 # Wait for this batch to complete before submitting the next one
+                results_from_api = {}
                 for future in futures:
                     ticker = futures[future]
                     try:
                         metrics = future.result()
                         if metrics:
-                            results[ticker] = metrics
+                            results_from_api[ticker] = metrics
+                            
+                            # Now handle output here, after getting results
+                            if args.verbosity >= 1:
+                                criteria_list = metrics.get('Met Criteria', [])
+                                total_criteria = 8  # Fixed number of criteria
+                                
+                                if args.verbosity == 1:
+                                    print(f"{ticker}: {len(criteria_list)} of {total_criteria} value criteria met")
+                                elif args.verbosity >= 2:
+                                    # For detailed output, manually show each criterion
+                                    print(f"\n{ticker} - Met {len(criteria_list)}/{total_criteria} criteria:")
+                                    
+                                    # Define criteria to check
+                                    criteria_to_check = [
+                                        (f"P/E ratio below {SETTINGS['PE_RATIO_MAX']}", 
+                                         f"P/E ratio below {SETTINGS['PE_RATIO_MAX']}" in criteria_list),
+                                        
+                                        (f"P/E×P/B below {SETTINGS['PE_PB_COMBO_MAX']}", 
+                                         f"P/E×P/B below {SETTINGS['PE_PB_COMBO_MAX']}" in criteria_list),
+                                        
+                                        (f"Balance Sheet Ratio above {SETTINGS['BALANCE_SHEET_RATIO_MIN']}", 
+                                         f"Balance Sheet Ratio above {SETTINGS['BALANCE_SHEET_RATIO_MIN']}" in criteria_list),
+                                        
+                                        (f"At least {SETTINGS['POSITIVE_EARNINGS_YEARS']} years of positive earnings", 
+                                         f"At least {SETTINGS['POSITIVE_EARNINGS_YEARS']} years of positive earnings" in criteria_list),
+                                        
+                                        (f"FCF Yield above {SETTINGS['FCF_YIELD_MIN']}%", 
+                                         f"FCF Yield above {SETTINGS['FCF_YIELD_MIN']}%" in criteria_list),
+                                        
+                                        (f"ROIC above {SETTINGS['ROIC_MIN']}%", 
+                                         f"ROIC above {SETTINGS['ROIC_MIN']}%" in criteria_list),
+                                        
+                                        (f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends", 
+                                         f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends" in criteria_list),
+                                        
+                                        (f"10Y Earnings Growth above {SETTINGS['EARNINGS_GROWTH_MIN']}%", 
+                                         f"10Y Earnings Growth above {SETTINGS['EARNINGS_GROWTH_MIN']}%" in criteria_list)
+                                    ]
+                                    
+                                    for desc, met in criteria_to_check:
+                                        mark = "✓" if met else "✗"
+                                        print(f"{mark} {desc}")
                     except Exception as e:
-                        logger.error(f"Error processing ticker {ticker}: {e}")
+                        logger.error(f"Error processing ticker {ticker}: {str(e)}")
+                
+                # Merge results
+                results.update(results_from_api)
                 
                 # Clear futures for the next batch
                 futures = {}
