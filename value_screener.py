@@ -265,7 +265,7 @@ LOG_LEVELS = {
 # Screening criteria settings
 SETTINGS = {
     'PE_RATIO_MAX': 18,           # Default: 15
-    'PE_PB_COMBO_MAX': 50,      # Default: 22.5
+    'PE_PB_COMBO_MAX': 150,      # Default: 22.5
     'BALANCE_SHEET_RATIO_MIN': 2,  # Default: 2
     'POSITIVE_EARNINGS_YEARS': 8,  # Default: 8
     'FCF_YIELD_MIN': 5,           # Default: 8%
@@ -1223,6 +1223,129 @@ def analyze_criteria_stats(results: Dict[str, Any]):
     for i, (name, count, percentage) in enumerate(most_challenging):
         print(f"{i+1}. {name}: {count} stocks ({percentage:.1f}%)")
 
+def show_criteria_explanation():
+    """Display detailed explanation of each screening criterion used in the value screener"""
+    print("\n===== VALUE INVESTING CRITERIA EXPLANATION =====\n")
+    
+    criteria_explanations = [
+        {
+            "name": "Price to Earnings (P/E) Ratio",
+            "setting": f"Current threshold: {SETTINGS['PE_RATIO_MAX']}",
+            "description": """
+The P/E ratio measures how expensive a stock is relative to its earnings. It represents how many 
+years of current earnings it would take to equal the purchase price. 
+
+A lower P/E ratio suggests a stock may be undervalued. Benjamin Graham typically recommended 
+stocks with a P/E ratio under 15, though this varies by industry and market conditions.
+
+Formula: Current Stock Price / Earnings Per Share (EPS)
+            """
+        },
+        {
+            "name": "Price to Earnings × Price to Book (P/E×P/B) Ratio",
+            "setting": f"Current threshold: {SETTINGS['PE_PB_COMBO_MAX']}",
+            "description": """
+This combined metric multiplies two valuation ratios to create a more comprehensive value 
+assessment. Graham suggested that a reasonable stock should have P/E × P/B < 22.5 (i.e., 
+P/E < 15 and P/B < 1.5).
+
+This metric helps identify stocks that are reasonably priced both in terms of earnings 
+and underlying assets, providing a margin of safety on both fronts.
+
+Formula: (P/E Ratio) × (Price to Book Ratio)
+            """
+        },
+        {
+            "name": "Balance Sheet Ratio (Assets to Liabilities)",
+            "setting": f"Current threshold: {SETTINGS['BALANCE_SHEET_RATIO_MIN']}",
+            "description": """
+This ratio measures a company's financial strength by comparing total assets to total liabilities. 
+A higher ratio indicates a stronger balance sheet with more assets than liabilities.
+
+Graham recommended companies with at least twice as many assets as liabilities (ratio >= 2) 
+to ensure financial stability and reduce the risk of bankruptcy.
+
+Formula: Total Assets / Total Liabilities
+            """
+        },
+        {
+            "name": "Positive Earnings History",
+            "setting": f"Current threshold: {SETTINGS['POSITIVE_EARNINGS_YEARS']} years",
+            "description": """
+This criterion checks if a company has maintained positive earnings (profitability) for a 
+sustained period, indicating business stability and consistent performance.
+
+Graham preferred companies that had demonstrated consistent profitability across business 
+cycles, typically looking for at least 10 years of positive earnings with no deficits.
+
+Metric: Number of consecutive years with positive earnings
+            """
+        },
+        {
+            "name": "Free Cash Flow (FCF) Yield",
+            "setting": f"Current threshold: {SETTINGS['FCF_YIELD_MIN']}%",
+            "description": """
+FCF Yield measures how much cash a company generates relative to its market value, after 
+accounting for capital expenditures needed to maintain the business.
+
+A higher FCF yield indicates a company is generating significant cash relative to its price, 
+potentially indicating undervaluation. It also suggests the company has funds available for 
+dividends, buybacks, debt reduction, or reinvestment.
+
+Formula: (Operating Cash Flow - Capital Expenditures) / Market Capitalization × 100%
+            """
+        },
+        {
+            "name": "Return on Invested Capital (ROIC)",
+            "setting": f"Current threshold: {SETTINGS['ROIC_MIN']}%",
+            "description": """
+ROIC measures how efficiently a company uses its capital to generate profits. It indicates 
+management's ability to allocate capital effectively.
+
+A higher ROIC suggests the company has a competitive advantage and can generate more profit 
+per dollar of invested capital. Value investors typically look for companies with ROIC 
+consistently above 10%.
+
+Formula: Net Operating Profit After Tax / Invested Capital × 100%
+            """
+        },
+        {
+            "name": "Dividend History",
+            "setting": f"Current threshold: {SETTINGS['DIVIDEND_HISTORY_YEARS']} years",
+            "description": """
+This criterion checks whether a company has paid dividends consistently over time, indicating 
+financial stability and shareholder-friendly management.
+
+Graham favored companies that had paid dividends without interruption for many years, as this 
+demonstrates financial health and a commitment to returning capital to shareholders.
+
+Metric: Number of consecutive years paying dividends
+            """
+        },
+        {
+            "name": "Earnings Growth",
+            "setting": f"Current threshold: {SETTINGS['EARNINGS_GROWTH_MIN']}%",
+            "description": """
+This measures the compound annual growth rate of a company's earnings over a multi-year period, 
+typically 10 years.
+
+While Graham emphasized value over growth, he recognized the importance of some earnings growth 
+to maintain the company's competitive position and increase intrinsic value over time.
+
+Formula: ((Ending EPS / Beginning EPS) ^ (1/years) - 1) × 100%
+            """
+        }
+    ]
+    
+    for i, criterion in enumerate(criteria_explanations):
+        print(f"{i+1}. {criterion['name']} ({criterion['setting']})")
+        print(criterion['description'].strip())
+        print("-" * 80)
+    
+    print("\nNOTE: These criteria are based on Benjamin Graham's value investing principles,")
+    print("      with adjustments for modern market conditions. The thresholds can be")
+    print("      customized in the SETTINGS dictionary at the top of the script.")
+
 def main():
     parser = argparse.ArgumentParser(
         description='Value Stock Screener - Screen stocks using Graham value investing principles',
@@ -1235,6 +1358,7 @@ Examples:
   python value_screener.py --verbosity 1              # Show summary for each stock
   python value_screener.py --verbosity 2              # Show detailed criteria for each stock
   python value_screener.py --checkcriteria            # Analyze which criteria are most often met
+  python value_screener.py --showcriteria             # Show detailed explanation of each criterion
 '''
     )
     parser.add_argument('--output', type=str, default='screener_results.csv',
@@ -1250,8 +1374,15 @@ Examples:
                       help='Show the version number and exit')
     parser.add_argument('--checkcriteria', action='store_true',
                       help='Analyze which criteria are most often met by stocks instead of showing passing stocks')
+    parser.add_argument('--showcriteria', action='store_true',
+                      help='Display detailed explanation of each screening criterion and current settings')
     args = parser.parse_args()
 
+    # If the showcriteria argument is provided, show criteria explanation and exit
+    if args.showcriteria:
+        show_criteria_explanation()
+        return
+        
     results = {}
     stored_data = {}
     tickers_to_update = []
@@ -1410,6 +1541,9 @@ Examples:
     if args.checkcriteria:
         # Special output mode that just counts how many stocks meet each criteria
         analyze_criteria_stats(results)
+    elif args.showcriteria:
+        # Show detailed explanation of each criterion
+        show_criteria_explanation()
     else:
         print("\n===== RESULTS =====")  # Always show results header with direct print
         
