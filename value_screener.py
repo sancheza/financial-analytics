@@ -6,6 +6,7 @@ import datetime
 from datetime import date, timedelta
 import pandas_datareader.data as web
 import json
+import ijson  # Added for memory-efficient JSON parsing
 import os
 import argparse
 from pathlib import Path
@@ -15,6 +16,8 @@ import requests
 import math  # Add math import for isnan/isinf functions
 from typing import Dict, Any, Optional, List, Tuple
 from alpha_vantage.fundamentaldata import FundamentalData
+from concurrent.futures import ThreadPoolExecutor  # Added for parallel processing
+import sys
 
 class AlphaVantageClient:
     def __init__(self, api_key):
@@ -236,19 +239,28 @@ class EdgarClient:
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,  # Default to WARNING level (3)
     format='%(asctime)s - %(levelname)s - %(message)s',
     force=True  # Force reconfiguration
 )
 logger = logging.getLogger(__name__)
 # Ensure logging is properly configured for immediate output
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.WARNING)  # Default to WARNING level
 handler = logging.StreamHandler()
-handler.setLevel(logging.INFO)
+handler.setLevel(logging.WARNING)  # Default to WARNING level
 logger.addHandler(handler)
 # Ensure stdout is flushed after each write
 import sys
 sys.stdout.reconfigure(line_buffering=True)
+
+# Define log level mapping for the --debug argument
+LOG_LEVELS = {
+    0: logging.CRITICAL,  # Only critical errors
+    1: logging.ERROR,     # Error and critical
+    2: logging.WARNING,   # Warning, error, and critical (default)
+    3: logging.INFO,      # Info, warning, error, and critical
+    4: logging.DEBUG,     # All messages including debug
+}
 
 # Screening criteria settings
 SETTINGS = {
@@ -265,12 +277,12 @@ SETTINGS = {
     'ALPHA_VANTAGE_KEY': 'MBSVCBG83NNOZ197'  # Alpha Vantage API key
 }
 
-# Data storage settings
-DATA_DIR = Path('./data/json')
+# Define data directory and file paths
+DATA_DIR = Path('data/json')
 DATA_FILE = DATA_DIR / 'stock_data.json'
 
 def ensure_data_dir():
-    """Ensure the data directory exists"""
+    """Make sure the data directory exists"""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_sp500_tickers():
@@ -292,27 +304,109 @@ def get_sp500_tickers():
         # Return a small default list in case of failure
         return ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META']
 
+def get_cached_tickers(cached_data: Dict[str, Any]) -> List[str]:
+    """Get list of tickers from cached data without any web requests.
+    This is used in cache mode to avoid any connections to external services.
+    """
+    if not cached_data:
+        return []
+        
+    # Extract only keys that are likely to be ticker symbols (not metadata keys)
+    return [k for k in cached_data.keys() if k != "Last Updated" and isinstance(k, str) and len(k) < 6]
+
 def load_stock_data() -> Dict[str, Any]:
-    """Load stock data from JSON file"""
+    """Load stock data from JSON file using memory-efficient parsing with ijson"""
     try:
         if DATA_FILE.exists():
-            with open(DATA_FILE, 'r') as f:
-                return json.load(f)
+            # First, check if the file is valid JSON and get the "Last Updated" field
+            last_updated = None
+            try:
+                with open(DATA_FILE, 'rb') as f:
+                    # Just get the Last Updated field which is at the top level
+                    for prefix, event, value in ijson.parse(f):
+                        if prefix == 'Last Updated' and event == 'string':
+                            last_updated = value
+                            break
+            except Exception as e:
+                logger.warning(f"Could not parse Last Updated field: {e}")
+            
+            # Now load the full file into a pandas DataFrame first for better performance
+            result = {"Last Updated": last_updated}
+            ticker_data = {}
+            
+            # Use pandas to load the file which handles large JSON data more efficiently
+            try:
+                with open(DATA_FILE, 'r') as f:
+                    # Read the file as JSON
+                    data = json.load(f)
+                    
+                    # Skip the Last Updated key which we already captured
+                    ticker_keys = [k for k in data.keys() if k != "Last Updated"]
+                    
+                    # Use a DataFrame for more efficient data processing
+                    if ticker_keys:
+                        # Convert the nested dictionary to a more efficient format
+                        df_data = []
+                        for ticker in ticker_keys:
+                            if isinstance(data[ticker], dict):
+                                ticker_info = data[ticker].copy()
+                                ticker_info['Ticker'] = ticker
+                                df_data.append(ticker_info)
+                        
+                        if df_data:
+                            # Create a DataFrame with all ticker data
+                            df = pd.DataFrame(df_data)
+                            
+                            # Convert back to dictionary format but more efficiently
+                            for _, row in df.iterrows():
+                                ticker = row['Ticker']
+                                # Filter out the Ticker column and convert to dict
+                                ticker_data[ticker] = row.drop('Ticker').to_dict()
+            
+            except Exception as e:
+                logger.error(f"Error converting data to DataFrame: {e}")
+                # Fall back to regular JSON loading if DataFrame approach fails
+                with open(DATA_FILE, 'r') as f:
+                    data = json.load(f)
+                    for key, value in data.items():
+                        if key != "Last Updated" and isinstance(value, dict):
+                            ticker_data[key] = value
+            
+            # Combine the results
+            result.update(ticker_data)
+            return result
     except Exception as e:
         logger.error(f"Error loading stock data: {e}")
     return {}
 
 def save_stock_data(data: Dict[str, Any]):
-    """Save stock data to JSON file with advanced type handling"""
+    """Save stock data to JSON file with advanced type handling.
+    This function preserves existing data while updating with new data.
+    """
     ensure_data_dir()
     try:
+        # First, load existing data if available
+        existing_data = {}
+        if DATA_FILE.exists():
+            try:
+                with open(DATA_FILE, 'r') as f:
+                    existing_data = json.load(f)
+                logger.info(f"Loaded existing data with {len(existing_data) - 1} tickers") # -1 for Last Updated key
+            except Exception as e:
+                logger.error(f"Error loading existing data: {e}")
+
         # Process data to ensure it's JSON serializable
         serializable_data = {}
         
         # First, add Last Updated field at the top level
         serializable_data["Last Updated"] = datetime.datetime.now().isoformat()
         
-        # Handle each ticker's data
+        # Copy all existing ticker data (except "Last Updated")
+        for key, value in existing_data.items():
+            if key != "Last Updated":
+                serializable_data[key] = value
+        
+        # Handle each new ticker's data - this will update existing tickers and add new ones
         for ticker, stock_info in data.items():
             if not isinstance(stock_info, dict):
                 continue  # Skip non-dictionary items
@@ -364,7 +458,7 @@ def save_stock_data(data: Dict[str, Any]):
         # If successful, rename the temp file to the actual file
         temp_file.replace(DATA_FILE)
             
-        logger.info(f"Stock data saved successfully to {DATA_FILE}")
+        logger.info(f"Stock data saved successfully to {DATA_FILE} with {len(serializable_data) - 1} tickers")
         
     except Exception as e:
         logger.error(f"Error saving stock data: {e}")
@@ -971,6 +1065,103 @@ def save_results_csv(results: Dict[str, Any], filepath: str):
     except Exception as e:
         logger.error(f"Error saving results to CSV: {e}")
 
+def validate_cached_stock(ticker: str, cached_data: Dict[str, Any], verbosity: int = 0) -> Dict[str, Any]:
+    """Validate cached stock data without making external API calls.
+    This function is used to evaluate cached data against criteria without 
+    fetching fresh data from APIs like Yahoo Finance.
+    """
+    metrics = cached_data.copy()
+    metrics['Ticker'] = ticker  # Ensure ticker is in the metrics
+    
+    # Use a custom validate function that doesn't make external calls
+    meets_criteria, met_criteria = validate_cached_criteria(metrics, verbosity)
+    metrics['Meets All Criteria'] = meets_criteria
+    metrics['Met Criteria Count'] = len(met_criteria)
+    metrics['Met Criteria'] = met_criteria
+    
+    # Show real-time results for higher verbosity levels
+    if verbosity == 1:
+        # Show summary for each stock as it's processed
+        total_criteria = 8  # Total number of criteria
+        print(f"{ticker}: {len(met_criteria)} of {total_criteria} value criteria met")
+    # For -vv, the detailed output is handled by validate_cached_criteria
+    
+    return metrics
+
+def validate_cached_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, List[str]]:
+    """Validate stock data against screening criteria without making API calls.
+    Pure function that only uses the provided data and doesn't access external resources.
+    """
+    try:
+        # Function to safely compare numeric values, handling complex numbers
+        def safe_compare(value, compare_fn, threshold):
+            if value is None:
+                return False
+            if isinstance(value, complex):
+                # For complex numbers, use only the real part for comparison
+                try:
+                    return compare_fn(value.real, threshold)
+                except:
+                    return False
+            elif not isinstance(value, (int, float)):
+                return False
+            try:
+                return compare_fn(value, threshold)
+            except:
+                return False
+
+        criteria_results = [
+            (safe_compare(data.get("P/E"), lambda x, y: x < y, SETTINGS['PE_RATIO_MAX']),
+             f"P/E ratio below {SETTINGS['PE_RATIO_MAX']}"),
+            
+            (safe_compare(data.get("P/E×P/B"), lambda x, y: x <= y, SETTINGS['PE_PB_COMBO_MAX']),
+             f"P/E×P/B below {SETTINGS['PE_PB_COMBO_MAX']}"),
+            
+            (safe_compare(data.get("Balance Sheet Ratio"), lambda x, y: x >= y, SETTINGS['BALANCE_SHEET_RATIO_MIN']),
+             f"Balance Sheet Ratio above {SETTINGS['BALANCE_SHEET_RATIO_MIN']}"),
+            
+            (data.get("Consecutive Positive Earnings Years", 0) >= SETTINGS['POSITIVE_EARNINGS_YEARS'],
+             f"At least {SETTINGS['POSITIVE_EARNINGS_YEARS']} years of positive earnings"),
+            
+            (safe_compare(data.get("FCF Yield (%)"), lambda x, y: x > y, SETTINGS['FCF_YIELD_MIN']),
+             f"FCF Yield above {SETTINGS['FCF_YIELD_MIN']}%"),
+            
+            (safe_compare(data.get("ROIC (%)"), lambda x, y: x >= y, SETTINGS['ROIC_MIN']),
+             f"ROIC above {SETTINGS['ROIC_MIN']}%"),
+            
+            (data.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
+             f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends"),
+            
+            (safe_compare(data.get("10Y Earnings Growth (%)"), lambda x, y: x >= y, SETTINGS['EARNINGS_GROWTH_MIN']),
+             f"10Y Earnings Growth above {SETTINGS['EARNINGS_GROWTH_MIN']}%")
+        ]
+        
+        # Get list of met criteria and count
+        met_criteria_list = []
+        met_count = 0
+        for met, desc in criteria_results:
+            if met:
+                met_criteria_list.append(desc)
+                met_count += 1
+                
+        total_criteria = len(criteria_results)
+        
+        # Output based on verbosity level
+        if verbosity >= 2:  # -vv mode: show detailed criteria with extra line spacing
+            ticker = data.get('Ticker', 'Unknown')
+            print(f"\n{ticker} - Met {met_count}/{total_criteria} criteria:")
+            for i, (met, desc) in enumerate(criteria_results):
+                if met:
+                    print(f"✓ {desc}")
+                else:
+                    print(f"✗ {desc}")
+        
+        # Return whether all criteria are met and the list of met criteria
+        return met_count == total_criteria, met_criteria_list
+    except Exception as e:
+        logger.error(f"Error validating cached criteria: {e}")
+        return False, []
+
 def main():
     parser = argparse.ArgumentParser(description='Value Stock Screener - Screen stocks using Graham value investing principles')
     parser.add_argument('--output', type=str, default='screener_results.csv',
@@ -985,65 +1176,150 @@ def main():
                        version=f'Value Stock Screener v{__version__}')
     args = parser.parse_args()
 
-    # Get S&P 500 tickers
-    tickers = get_sp500_tickers()
-    print(f"Retrieved {len(tickers)} tickers from S&P 500")  # Only print once, logging happens in get_sp500_tickers()
-    
-    # Sort tickers alphabetically
-    tickers.sort()
-    #print("Sorting tickers alphabetically")
-    #logger.info("Sorting tickers alphabetically")
-    
-    # If test mode is active, limit the number of tickers
-    if args.test > 0:
-        tickers = tickers[:args.test]
-        print(f"TEST MODE: Limited to {len(tickers)} tickers")
-        logger.info(f"TEST MODE: Limited to {len(tickers)} tickers")
-
     results = {}
     stored_data = {}
-    all_tickers = tickers.copy()  # Keep track of all tickers for reporting
+    tickers_to_update = []
+    cached_tickers = []
 
-    if not args.forceupdate:
-        # Try to load existing data
+    # Check if we're using cached data
+    use_cached_data = not args.forceupdate
+    
+    if use_cached_data:
+        # Try to load existing data without making web requests
         stored_data = load_stock_data()
+        
         if stored_data and isinstance(stored_data, dict):
-            # Skip special keys like "Last Updated" that aren't ticker data
-            ticker_keys = [k for k in stored_data.keys() if k not in ["Last Updated"]]
-            if ticker_keys:
+            # Get tickers from cache without making web requests
+            tickers = get_cached_tickers(stored_data)
+            if tickers:
+                print(f"Retrieved {len(tickers)} tickers from cached data")
+                
+                # Sort tickers alphabetically
+                tickers.sort()
+                print("Sorting tickers alphabetically")
+                
+                # Apply test parameter in both cache and web modes
+                if args.test > 0:
+                    tickers = tickers[:args.test]
+                    print(f"TEST MODE: Limited to {len(tickers)} tickers")
+                    logger.info(f"TEST MODE: Limited to {len(tickers)} tickers")
+                
                 print("Using cached stock data")
-                #logger.info("Using cached stock data")
-                # Copy only valid ticker data
-                results = {k: v for k, v in stored_data.items() if k in ticker_keys and isinstance(v, dict)}
-                # Only screen tickers that need updating
-                tickers = get_tickers_needing_update(stored_data, tickers)
-                if not tickers:
-                    print("All data is up to date")
-                    logger.info("All data is up to date")
+                # All tickers are from cache, so all can use cache
+                cached_tickers = tickers
+                
+                print("All data is up to date")
+            else:
+                use_cached_data = False
+        else:
+            use_cached_data = False
+    
+    # If we can't use cached data, fetch from web
+    if not use_cached_data:
+        # Get S&P 500 tickers from web
+        tickers = get_sp500_tickers()
+        print(f"Retrieved {len(tickers)} tickers from S&P 500")
+        
+        # Sort tickers alphabetically
+        tickers.sort()
+        print("Sorting tickers alphabetically")
+        
+        # If test mode is active, limit the number of tickers
+        if args.test > 0:
+            tickers = tickers[:args.test]
+            print(f"TEST MODE: Limited to {len(tickers)} tickers")
+            logger.info(f"TEST MODE: Limited to {len(tickers)} tickers")
+            
+        if not args.forceupdate:
+            # Check against stored data if not forcing update
+            if stored_data and isinstance(stored_data, dict):
+                for ticker in tickers:
+                    if ticker in stored_data and isinstance(stored_data[ticker], dict):
+                        cached_tickers.append(ticker)  # Use cache for this ticker
+                    else:
+                        tickers_to_update.append(ticker)  # Need to fetch data for this ticker
+            else:
+                # No cached data available
+                tickers_to_update = tickers
+        else:
+            # Force update mode - process all tickers
+            tickers_to_update = tickers
 
-    # Screen stocks that need updating
-    for ticker in tickers:
-        # Always show progress regardless of verbosity level
+    # Process cached tickers without making external API calls
+    def process_cached_ticker(ticker):
+        """Process a ticker using cached data only - no API calls"""
+        if args.v == 0:
+            print(f"Validating cached data for {ticker}...")
+            
+        # Use the cached data without making external API calls
+        return validate_cached_stock(ticker, stored_data[ticker], args.v)
+    
+    # Screen stocks that need fresh data
+    def process_new_ticker(ticker):
+        """Process a ticker by fetching fresh data from APIs"""
         if args.v == 0:
             print(f"Screening {ticker}...")
             logger.info(f"Screening {ticker}...")
         
         metrics = screen_stock(ticker)
         if metrics:  # Only include stocks with data
-            # Calculate criteria - this time we DO need to output during screening for higher verbosity
+            # Calculate criteria
             meets_criteria, met_criteria = validate_against_criteria(metrics, args.v)
             metrics['Meets All Criteria'] = meets_criteria
             metrics['Met Criteria Count'] = len(met_criteria)
             metrics['Met Criteria'] = met_criteria
-            results[ticker] = metrics
-            
-            # Show real-time results for higher verbosity levels
-            if args.v == 1:
-                # Show summary for each stock as it's processed
-                total_criteria = 8  # Total number of criteria
-                print(f"{ticker}: {len(met_criteria)} of {total_criteria} value criteria met")
-            # For -vv, validate_against_criteria already prints the details
-    
+            return metrics
+        return None
+
+    # Process cached tickers in parallel (no API calls)
+    if cached_tickers:
+        print(f"Processing {len(cached_tickers)} cached tickers without API calls...")
+        with ThreadPoolExecutor() as executor:
+            futures = {executor.submit(process_cached_ticker, ticker): ticker for ticker in cached_tickers}
+            for future in futures:
+                ticker = futures[future]
+                try:
+                    metrics = future.result()
+                    if metrics:
+                        results[ticker] = metrics
+                except Exception as e:
+                    logger.error(f"Error processing cached ticker {ticker}: {e}")
+
+    # Process tickers that need updating (with API calls)
+    if tickers_to_update:
+        print(f"Fetching data for {len(tickers_to_update)} tickers that need updating...")
+        # Limit the number of workers to avoid overwhelming connection pools
+        max_workers = 5  # Reduced from default to avoid connection pool warnings
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {}
+            # Submit jobs in smaller batches with delays between batches
+            batch_size = max_workers
+            for i in range(0, len(tickers_to_update), batch_size):
+                batch = tickers_to_update[i:i+batch_size]
+                print(f"Processing batch {i//batch_size + 1}/{(len(tickers_to_update) + batch_size - 1)//batch_size}...")
+                
+                # Submit this batch
+                for ticker in batch:
+                    futures[executor.submit(process_new_ticker, ticker)] = ticker
+                
+                # Wait for this batch to complete before submitting the next one
+                for future in futures:
+                    ticker = futures[future]
+                    try:
+                        metrics = future.result()
+                        if metrics:
+                            results[ticker] = metrics
+                    except Exception as e:
+                        logger.error(f"Error processing ticker {ticker}: {e}")
+                
+                # Clear futures for the next batch
+                futures = {}
+                
+                # Add a delay between batches to avoid overwhelming the connection pool
+                if i + batch_size < len(tickers_to_update):
+                    print(f"Waiting {SETTINGS['REQUEST_DELAY']} seconds before next batch...")
+                    time.sleep(SETTINGS['REQUEST_DELAY'])
+
     # Always process and save results
     if results:
         # Save both JSON and CSV formats
@@ -1076,7 +1352,7 @@ def main():
             logger.info(msg)
     elif args.v == 1:  # Simple summary mode
         msg = f"Screening complete. Found data for {len(results)} stocks."
-        print(msg)  # Direct print only, no logger
+        print(msg)
         
         # We've already displayed criteria for each stock during processing,
         # so just show a summary count of passing stocks
