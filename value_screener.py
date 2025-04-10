@@ -12,6 +12,7 @@ from pathlib import Path
 import logging
 import time
 import requests
+import math  # Add math import for isnan/isinf functions
 from typing import Dict, Any, Optional, List, Tuple
 from alpha_vantage.fundamentaldata import FundamentalData
 
@@ -137,12 +138,43 @@ class EdgarClient:
             return None
 
     def get_financial_data_with_alternatives(self, cik: str, concepts: List[str]) -> Optional[Dict]:
-        """Try multiple concept names and return the first one that works"""
+        """Try multiple concept names and return the first one that works.
+        Improved to handle multiple fallback options with minimal logging.
+        """
+        if not cik:
+            return None
+            
+        result = None
+        found_concept = None
+        
+        # Try each concept name in order until one works
         for concept in concepts:
-            data = self.get_financial_data(cik, concept)
-            if data and 'units' in data:
-                return data
-        return None
+            try:
+                self._wait_for_rate_limit()
+                url = f'https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{concept}.json'
+                response = requests.get(url, headers=self.headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'units' in data:
+                        result = data
+                        found_concept = concept
+                        break
+                # Don't log 404s as they're expected when trying alternative concepts
+                elif response.status_code != 404:
+                    logging.debug(f"{response.status_code} for {concept}")
+            except Exception as e:
+                # Only log non-HTTP errors at debug level
+                logging.debug(f"Error for {concept}: {str(e)}")
+                
+        if result:
+            if found_concept != concepts[0]:
+                logging.debug(f"Used alternative concept {found_concept} instead of {concepts[0]}")
+            return result
+        else:
+            # Only log one summary error instead of one per concept
+            logging.debug(f"Could not find any concepts for CIK {cik}: {concepts}")
+            return None
 
     def get_historical_eps(self, ticker: str) -> Optional[pd.DataFrame]:
         """Get historical EPS data from SEC filings"""
@@ -151,8 +183,10 @@ class EdgarClient:
             return None
             
         try:
-            # Get EPS data from SEC API
-            eps_data = self.get_financial_data(cik, 'EarningsPerShareDiluted')
+            # Get EPS data from SEC API - try multiple concept names
+            eps_data = self.get_financial_data_with_alternatives(cik, 
+                ['EarningsPerShareDiluted', 'EarningsPerShareBasic', 'EarningsPerShare'])
+                
             if not eps_data or 'units' not in eps_data:
                 return None
                 
@@ -240,8 +274,23 @@ def ensure_data_dir():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_sp500_tickers():
-    """Get list of test tickers (temporary override)"""
-    return ['PFE', 'AAPL', 'MRNA', 'MSFT', 'MS']
+    """Get list of S&P 500 tickers from Wikipedia."""
+    try:
+        # Fetch S&P 500 tickers from Wikipedia
+        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        tables = pd.read_html(url)
+        sp500_table = tables[0]  # First table contains S&P 500 companies
+        tickers = sp500_table['Symbol'].tolist()
+        
+        # Clean ticker symbols
+        tickers = [ticker.replace('.', '-') for ticker in tickers]  # Replace dots with hyphens for Yahoo Finance
+        
+        logger.info(f"Retrieved {len(tickers)} tickers from S&P 500")
+        return tickers
+    except Exception as e:
+        logger.error(f"Error retrieving S&P 500 tickers: {e}")
+        # Return a small default list in case of failure
+        return ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META']
 
 def load_stock_data() -> Dict[str, Any]:
     """Load stock data from JSON file"""
@@ -254,13 +303,79 @@ def load_stock_data() -> Dict[str, Any]:
     return {}
 
 def save_stock_data(data: Dict[str, Any]):
-    """Save stock data to JSON file"""
+    """Save stock data to JSON file with advanced type handling"""
     ensure_data_dir()
     try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
+        # Process data to ensure it's JSON serializable
+        serializable_data = {}
+        
+        # First, add Last Updated field at the top level
+        serializable_data["Last Updated"] = datetime.datetime.now().isoformat()
+        
+        # Handle each ticker's data
+        for ticker, stock_info in data.items():
+            if not isinstance(stock_info, dict):
+                continue  # Skip non-dictionary items
+                
+            cleaned_info = {}
+            for key, value in stock_info.items():
+                # Handle complex numbers
+                if isinstance(value, complex):
+                    cleaned_info[key] = str(value)
+                # Handle NaN, Infinity
+                elif isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+                    cleaned_info[key] = None
+                # Handle pandas DataFrame, Series or other objects
+                elif hasattr(value, 'to_dict'):
+                    try:
+                        cleaned_info[key] = value.to_dict()
+                    except:
+                        cleaned_info[key] = str(value)
+                # Handle dates and datetimes
+                elif isinstance(value, (datetime.date, datetime.datetime)):
+                    cleaned_info[key] = value.isoformat()
+                # Handle lists and arrays - check each element
+                elif isinstance(value, (list, tuple, set)):
+                    cleaned_list = []
+                    for item in value:
+                        if isinstance(item, (int, float, str, bool, dict)):
+                            if isinstance(item, float) and (math.isnan(item) or math.isinf(item)):
+                                cleaned_list.append(None)
+                            elif isinstance(item, complex):
+                                cleaned_list.append(str(item))
+                            else:
+                                cleaned_list.append(item)
+                        else:
+                            cleaned_list.append(str(item))
+                    cleaned_info[key] = cleaned_list
+                # Convert any other non-serializable types to strings
+                elif not isinstance(value, (int, float, str, bool, dict, type(None))):
+                    cleaned_info[key] = str(value)
+                else:
+                    cleaned_info[key] = value
+            serializable_data[ticker] = cleaned_info
+
+        # Write with a clear error handling strategy - use a temporary file approach
+        # to avoid corrupting the original file if serialization fails
+        temp_file = DATA_FILE.with_suffix('.tmp')
+        with open(temp_file, 'w') as f:
+            json.dump(serializable_data, f, indent=2, default=str)
+            
+        # If successful, rename the temp file to the actual file
+        temp_file.replace(DATA_FILE)
+            
+        logger.info(f"Stock data saved successfully to {DATA_FILE}")
+        
     except Exception as e:
         logger.error(f"Error saving stock data: {e}")
+        
+        # Try to create an empty but valid JSON file as fallback
+        try:
+            with open(DATA_FILE, 'w') as f:
+                json.dump({"Last Updated": datetime.datetime.now().isoformat()}, f)
+            logger.warning("Created empty stock data file as fallback")
+        except:
+            logger.error("Failed to create even an empty stock data file")
 
 def data_needs_update(data: Dict[str, Any], max_age_days: int = None) -> bool:
     """Check if data needs to be updated based on age"""
@@ -583,22 +698,46 @@ def modern_graham_screen(ticker: str, use_local: bool = False) -> Optional[Dict[
 def validate_against_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, List[str]]:
     """Validate stock data against screening criteria and return which criteria were met"""
     try:
+        # Function to safely compare numeric values, handling complex numbers
+        def safe_compare(value, compare_fn, threshold):
+            if value is None:
+                return False
+            if isinstance(value, complex):
+                # For complex numbers, use only the real part for comparison
+                try:
+                    return compare_fn(value.real, threshold)
+                except:
+                    return False
+            elif not isinstance(value, (int, float)):
+                return False
+            try:
+                return compare_fn(value, threshold)
+            except:
+                return False
+
         criteria_results = [
-            (data.get("P/E") and data["P/E"] < SETTINGS['PE_RATIO_MAX'],
+            (safe_compare(data.get("P/E"), lambda x, y: x < y, SETTINGS['PE_RATIO_MAX']),
              f"P/E ratio below {SETTINGS['PE_RATIO_MAX']}"),
-            (data.get("P/E×P/B") and data["P/E×P/B"] <= SETTINGS['PE_PB_COMBO_MAX'],
+            
+            (safe_compare(data.get("P/E×P/B"), lambda x, y: x <= y, SETTINGS['PE_PB_COMBO_MAX']),
              f"P/E×P/B below {SETTINGS['PE_PB_COMBO_MAX']}"),
-            (data.get("Balance Sheet Ratio") and data["Balance Sheet Ratio"] >= SETTINGS['BALANCE_SHEET_RATIO_MIN'],
+            
+            (safe_compare(data.get("Balance Sheet Ratio"), lambda x, y: x >= y, SETTINGS['BALANCE_SHEET_RATIO_MIN']),
              f"Balance Sheet Ratio above {SETTINGS['BALANCE_SHEET_RATIO_MIN']}"),
+            
             (data.get("Consecutive Positive Earnings Years", 0) >= SETTINGS['POSITIVE_EARNINGS_YEARS'],
              f"At least {SETTINGS['POSITIVE_EARNINGS_YEARS']} years of positive earnings"),
-            (data.get("FCF Yield (%)") and data["FCF Yield (%)"] > SETTINGS['FCF_YIELD_MIN'],
+            
+            (safe_compare(data.get("FCF Yield (%)"), lambda x, y: x > y, SETTINGS['FCF_YIELD_MIN']),
              f"FCF Yield above {SETTINGS['FCF_YIELD_MIN']}%"),
-            (data.get("ROIC (%)") and data["ROIC (%)"] >= SETTINGS['ROIC_MIN'],
+            
+            (safe_compare(data.get("ROIC (%)"), lambda x, y: x >= y, SETTINGS['ROIC_MIN']),
              f"ROIC above {SETTINGS['ROIC_MIN']}%"),
+            
             (data.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
              f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends"),
-            (data.get("10Y Earnings Growth (%)") and data["10Y Earnings Growth (%)"] >= SETTINGS['EARNINGS_GROWTH_MIN'],
+            
+            (safe_compare(data.get("10Y Earnings Growth (%)"), lambda x, y: x >= y, SETTINGS['EARNINGS_GROWTH_MIN']),
              f"10Y Earnings Growth above {SETTINGS['EARNINGS_GROWTH_MIN']}%")
         ]
         
@@ -614,7 +753,8 @@ def validate_against_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, Lis
         
         # Output based on verbosity level
         if verbosity >= 2:  # -vv mode: show detailed criteria
-            print(f"Met {met_count}/{total_criteria} criteria:")
+            ticker = data.get('Ticker', 'Unknown')
+            print(f"\n{ticker} met {met_count}/{total_criteria} criteria:")
             for i, (met, desc) in enumerate(criteria_results):
                 if met:
                     print(f"✓ {desc}")
@@ -837,6 +977,8 @@ def main():
                        help='Output file path (CSV format)')
     parser.add_argument('--forceupdate', action='store_true',
                        help='Force update of stock data instead of using cached data')
+    parser.add_argument('--test', type=int, default=0,
+                       help='Run with a limited number of tickers (for testing)')
     parser.add_argument('-v', action='count', default=0,
                        help='Verbosity level (-v for summary, -vv for detailed criteria)')
     parser.add_argument('--version', action='version',
@@ -847,6 +989,17 @@ def main():
     tickers = get_sp500_tickers()
     logger.info(f"Retrieved {len(tickers)} tickers from S&P 500")
     print(f"Retrieved {len(tickers)} tickers from S&P 500")  # Direct print as backup
+    
+    # Sort tickers alphabetically
+    tickers.sort()
+    logger.info("Sorting tickers alphabetically")
+    print("Sorting tickers alphabetically")
+    
+    # If test mode is active, limit the number of tickers
+    if args.test > 0:
+        tickers = tickers[:args.test]
+        logger.info(f"TEST MODE: Limited to {len(tickers)} tickers")
+        print(f"TEST MODE: Limited to {len(tickers)} tickers")
 
     results = {}
     stored_data = {}
@@ -855,28 +1008,42 @@ def main():
     if not args.forceupdate:
         # Try to load existing data
         stored_data = load_stock_data()
-        if stored_data:
-            logger.info("Using cached stock data")
-            print("Using cached stock data")  # Direct print as backup
-            results = stored_data
-            # Only screen tickers that need updating
-            tickers = get_tickers_needing_update(stored_data, tickers)
-            if not tickers:
-                logger.info("All data is up to date")
-                print("All data is up to date")  # Direct print as backup
+        if stored_data and isinstance(stored_data, dict):
+            # Skip special keys like "Last Updated" that aren't ticker data
+            ticker_keys = [k for k in stored_data.keys() if k not in ["Last Updated"]]
+            if ticker_keys:
+                logger.info("Using cached stock data")
+                print("Using cached stock data")  # Direct print as backup
+                # Copy only valid ticker data
+                results = {k: v for k, v in stored_data.items() if k in ticker_keys and isinstance(v, dict)}
+                # Only screen tickers that need updating
+                tickers = get_tickers_needing_update(stored_data, tickers)
+                if not tickers:
+                    logger.info("All data is up to date")
+                    print("All data is up to date")  # Direct print as backup
 
     # Screen stocks that need updating
     for ticker in tickers:
-        if args.v < 1:
+        # Always show progress regardless of verbosity level
+        if args.v == 0:
             logger.info(f"Screening {ticker}...")
             print(f"Screening {ticker}...")  # Direct print as backup
+        
         metrics = screen_stock(ticker)
         if metrics:  # Only include stocks with data
-            meets_criteria, met_criteria = validate_against_criteria(metrics, 0)  # Don't output during screening
+            # Calculate criteria - this time we DO need to output during screening for higher verbosity
+            meets_criteria, met_criteria = validate_against_criteria(metrics, args.v)
             metrics['Meets All Criteria'] = meets_criteria
             metrics['Met Criteria Count'] = len(met_criteria)
             metrics['Met Criteria'] = met_criteria
             results[ticker] = metrics
+            
+            # Show real-time results for higher verbosity levels
+            if args.v == 1:
+                # Show summary for each stock as it's processed
+                total_criteria = 8  # Total number of criteria
+                print(f"{ticker}: {len(met_criteria)} of {total_criteria} value criteria met")
+            # For -vv, validate_against_criteria already prints the details
     
     # Always process and save results
     if results:
@@ -887,8 +1054,13 @@ def main():
     print("\n===== RESULTS =====")  # Always show results header with direct print
     
     # Always display results based on verbosity level
-    passing_stocks = [ticker for ticker, metrics in results.items() 
-                     if metrics.get('Meets All Criteria', False)]
+    passing_stocks = []
+    for ticker, metrics in results.items():
+        if isinstance(metrics, dict) and metrics.get('Meets All Criteria', False):
+            passing_stocks.append(ticker)
+    
+    # Sort passing stocks alphabetically for consistent output
+    passing_stocks.sort()
     
     if args.v == 0:  # Standard output mode
         msg = f"Screening complete. Found data for {len(results)} stocks."
@@ -907,25 +1079,21 @@ def main():
         msg = f"Screening complete. Found data for {len(results)} stocks."
         print(msg)  # Direct print only, no logger
         
-        # Show summary for all stocks - only print, don't log
-        print("Value criteria results:")
-        for ticker in all_tickers:
-            if ticker in results:
-                metrics = results[ticker]
-                total_criteria = 8  # Total number of criteria
-                met_count = metrics.get('Met Criteria Count', 0)
-                print(f"{ticker} {met_count} of {total_criteria} value criteria met")  # Direct print only
+        # We've already displayed criteria for each stock during processing,
+        # so just show a summary count of passing stocks
+        print(f"{len(passing_stocks)} stocks meet all Graham value criteria.")
+        if passing_stocks:
+            print(f"Passing stocks: {', '.join(passing_stocks)}")
     elif args.v >= 2:  # Detailed criteria mode
         msg = f"Screening complete. Found data for {len(results)} stocks."
         logger.info(msg)
         print(msg)  # Direct print as backup
         
-        # Show detailed criteria for all stocks
-        for ticker in all_tickers:
-            if ticker in results:
-                metrics = results[ticker]
-                print(f"\nDetailed criteria for {ticker}:")
-                validate_against_criteria(metrics, 2)  # This will print the detailed results
+        # We've already displayed detailed criteria for each stock during processing,
+        # so just show a summary count of passing stocks
+        print(f"{len(passing_stocks)} stocks meet all Graham value criteria.")
+        if passing_stocks:
+            print(f"Passing stocks: {', '.join(passing_stocks)}")
 
 if __name__ == "__main__":
     main()
