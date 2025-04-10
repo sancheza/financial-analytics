@@ -12,7 +12,7 @@ from pathlib import Path
 import logging
 import time
 import requests
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from alpha_vantage.fundamentaldata import FundamentalData
 
 class AlphaVantageClient:
@@ -203,9 +203,18 @@ class EdgarClient:
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    force=True  # Force reconfiguration
 )
 logger = logging.getLogger(__name__)
+# Ensure logging is properly configured for immediate output
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
+logger.addHandler(handler)
+# Ensure stdout is flushed after each write
+import sys
+sys.stdout.reconfigure(line_buffering=True)
 
 # Screening criteria settings
 SETTINGS = {
@@ -316,10 +325,8 @@ def get_earnings_growth(ticker: str, edgar_client: Optional[EdgarClient] = None,
                 
                 if oldest != 0 and not pd.isna(oldest) and not pd.isna(newest):
                     growth = (((newest / oldest) ** (1/years_diff)) - 1) * 100
-                    logger.debug(f"Calculated {years_diff:.1f}-year earnings growth: {growth:.1f}%")
                     return growth
                     
-        logger.debug(f"Insufficient earnings history for growth calculation")
         return None
     except Exception as e:
         logger.debug(f"Error calculating earnings growth: {e}")
@@ -330,7 +337,6 @@ def check_positive_earnings_streak(sec_data, years=8):
     try:
         if 'historicalEPS' in sec_data and len(sec_data['historicalEPS']) >= years:
             return all(float(eps['eps']) > 0 for eps in sec_data['historicalEPS'][:years])
-        logger.debug(f"Insufficient earnings history for streak check")
         return False
     except Exception as e:
         logger.debug(f"Error checking earnings streak: {e}")
@@ -341,14 +347,12 @@ def check_dividend_history(stock, years=20):
     try:
         dividends = stock.dividends
         if dividends.empty:
-            logger.debug("No dividend history found")
             return False
             
         current_year = date.today().year
         earliest_year = dividends.index[0].year
         
         if current_year - earliest_year < years:
-            logger.debug(f"Insufficient dividend history: {current_year - earliest_year} years")
             return False
             
         yearly_dividends = dividends.groupby(dividends.index.year).sum()
@@ -382,7 +386,6 @@ def calculate_roic(sec_data, _):
             roic = (net_income / invested_capital) * 100
             return roic
                 
-        logger.debug("Missing data for ROIC calculation")
         return None
     except Exception as e:
         logger.debug(f"Error calculating ROIC: {e}")
@@ -499,7 +502,6 @@ def calculate_balance_sheet_ratio(sec_data: Dict) -> Optional[float]:
             return None
             
         ratio = total_assets / total_liabilities
-        logger.debug(f"Balance sheet ratio calculation: {total_assets} / {total_liabilities} = {ratio}")
         return ratio
     except Exception as e:
         logger.error(f"Error calculating balance sheet ratio: {e}")
@@ -515,7 +517,6 @@ def modern_graham_screen(ticker: str, use_local: bool = False) -> Optional[Dict[
                 if stored_data and not any(stored_data.get(field) is None for field in 
                                          ["Balance Sheet Ratio", "FCF Yield (%)", "ROIC (%)", "10Y Earnings Growth (%)"]):
                     return stored_data
-                logger.debug(f"No valid data found for {ticker}")
                 return None
 
         # Initialize clients
@@ -525,7 +526,6 @@ def modern_graham_screen(ticker: str, use_local: bool = False) -> Optional[Dict[
         # Get data
         sec_data = edgar_client.get_financial_data(edgar_client.get_cik(ticker), 'NetIncomeLoss')
         if not validate_sec_data(sec_data):
-            logger.warning(f"Incomplete or invalid SEC data for {ticker}")
             return None
             
         overview = av_client.get_overview(ticker)
@@ -572,7 +572,7 @@ def modern_graham_screen(ticker: str, use_local: bool = False) -> Optional[Dict[
         }
 
         # Validate against criteria
-        stock_data["Meets All Criteria"] = validate_against_criteria(stock_data)
+        stock_data["Meets All Criteria"], stock_data["Met Criteria"] = validate_against_criteria(stock_data)
         
         return stock_data
 
@@ -580,22 +580,52 @@ def modern_graham_screen(ticker: str, use_local: bool = False) -> Optional[Dict[
         logger.error(f"Error processing {ticker}: {str(e)}")
         return None
 
-def validate_against_criteria(data: Dict) -> bool:
-    """Validate stock data against screening criteria"""
+def validate_against_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, List[str]]:
+    """Validate stock data against screening criteria and return which criteria were met"""
     try:
-        return all([
-            data.get("P/E") and data["P/E"] < SETTINGS['PE_RATIO_MAX'],
-            data.get("P/E×P/B") and data["P/E×P/B"] <= SETTINGS['PE_PB_COMBO_MAX'],
-            data.get("Balance Sheet Ratio") and data["Balance Sheet Ratio"] >= SETTINGS['BALANCE_SHEET_RATIO_MIN'],
-            data.get("Has 8Y+ Positive Earnings", False),
-            data.get("FCF Yield (%)") and data["FCF Yield (%)"] > SETTINGS['FCF_YIELD_MIN'],
-            data.get("ROIC (%)") and data["ROIC (%)"] >= SETTINGS['ROIC_MIN'],
-            data.get("Has Required Dividend History", False),
-            data.get("10Y Earnings Growth (%)") and data["10Y Earnings Growth (%)"] >= SETTINGS['EARNINGS_GROWTH_MIN']
-        ])
+        criteria_results = [
+            (data.get("P/E") and data["P/E"] < SETTINGS['PE_RATIO_MAX'],
+             f"P/E ratio below {SETTINGS['PE_RATIO_MAX']}"),
+            (data.get("P/E×P/B") and data["P/E×P/B"] <= SETTINGS['PE_PB_COMBO_MAX'],
+             f"P/E×P/B below {SETTINGS['PE_PB_COMBO_MAX']}"),
+            (data.get("Balance Sheet Ratio") and data["Balance Sheet Ratio"] >= SETTINGS['BALANCE_SHEET_RATIO_MIN'],
+             f"Balance Sheet Ratio above {SETTINGS['BALANCE_SHEET_RATIO_MIN']}"),
+            (data.get("Consecutive Positive Earnings Years", 0) >= SETTINGS['POSITIVE_EARNINGS_YEARS'],
+             f"At least {SETTINGS['POSITIVE_EARNINGS_YEARS']} years of positive earnings"),
+            (data.get("FCF Yield (%)") and data["FCF Yield (%)"] > SETTINGS['FCF_YIELD_MIN'],
+             f"FCF Yield above {SETTINGS['FCF_YIELD_MIN']}%"),
+            (data.get("ROIC (%)") and data["ROIC (%)"] >= SETTINGS['ROIC_MIN'],
+             f"ROIC above {SETTINGS['ROIC_MIN']}%"),
+            (data.get("Consecutive Dividend Years", 0) >= SETTINGS['DIVIDEND_HISTORY_YEARS'],
+             f"At least {SETTINGS['DIVIDEND_HISTORY_YEARS']} years of dividends"),
+            (data.get("10Y Earnings Growth (%)") and data["10Y Earnings Growth (%)"] >= SETTINGS['EARNINGS_GROWTH_MIN'],
+             f"10Y Earnings Growth above {SETTINGS['EARNINGS_GROWTH_MIN']}%")
+        ]
+        
+        # Get list of met criteria and count
+        met_criteria_list = []
+        met_count = 0
+        for met, desc in criteria_results:
+            if met:
+                met_criteria_list.append(desc)
+                met_count += 1
+                
+        total_criteria = len(criteria_results)
+        
+        # Output based on verbosity level
+        if verbosity >= 2:  # -vv mode: show detailed criteria
+            print(f"Met {met_count}/{total_criteria} criteria:")
+            for i, (met, desc) in enumerate(criteria_results):
+                if met:
+                    print(f"✓ {desc}")
+                else:
+                    print(f"✗ {desc}")
+        
+        # Return whether all criteria are met and the list of met criteria
+        return met_count == total_criteria, met_criteria_list
     except Exception as e:
         logger.error(f"Error validating criteria: {e}")
-        return False
+        return False, []
 
 def screen_stock(ticker: str) -> Dict[str, Any]:
     """Screen a single stock for value metrics."""
@@ -603,32 +633,39 @@ def screen_stock(ticker: str) -> Dict[str, Any]:
         # Initialize clients
         edgar_client = EdgarClient()
         stock = yf.Ticker(ticker)
-        
+        metrics = {'Ticker': ticker}  # Add ticker to metrics right away
+
+        # Get basic info from yfinance first as it's more reliable
+        try:
+            info = stock.info
+            if info:
+                metrics['Market Cap'] = info.get('marketCap')
+                # Get current price reliably
+                current_price = stock.history(period='1d')['Close'].iloc[-1]
+                metrics['Current Price'] = current_price
+        except Exception as e:
+            logger.error(f"Error getting yfinance data for {ticker}: {e}")
+
         # Get CIK
         cik = edgar_client.get_cik(ticker)
         if not cik:
             logger.warning(f"No CIK found for {ticker}")
             return {}
 
-        metrics = {}
-        
-        # 1. Net Income (historical data for growth and positive earnings check)
+        # 1. Net Income and Earnings History
+        # Start with the most reliable concepts
         net_income_data = edgar_client.get_financial_data_with_alternatives(cik, 
             ['NetIncomeLoss', 
              'NetIncome', 
-             'ProfitLoss', 
-             'IncomeLossFromContinuingOperations',
-             'NetIncomeLossAvailableToCommonStockholdersBasic'])
+             'ProfitLoss'])
         
         if net_income_data and 'units' in net_income_data:
-            # Get historical net income values
             net_income_history = []
             for unit_type in net_income_data['units']:
                 for entry in net_income_data['units'][unit_type]:
                     if entry.get('form') == '10-K':
                         net_income_history.append((entry['end'], entry['val']))
             
-            # Sort by date
             net_income_history.sort(key=lambda x: x[0], reverse=True)
             
             if net_income_history:
@@ -640,22 +677,22 @@ def screen_stock(ticker: str) -> Dict[str, Any]:
                     if val > 0:
                         positive_years += 1
                     else:
-                        break  # Stop at first negative/zero earnings
+                        break
                 metrics['Consecutive Positive Earnings Years'] = positive_years
                 
                 # Calculate 10Y earnings growth if enough data
                 if len(net_income_history) >= 10:
                     latest = net_income_history[0][1]
                     oldest = net_income_history[9][1]
-                    if oldest > 0:  # Avoid division by zero
+                    if oldest > 0:
                         growth_rate = ((latest / oldest) ** (1/10) - 1) * 100
                         metrics['10Y Earnings Growth (%)'] = growth_rate
 
-        # 2. Balance Sheet Data
+        # 2. Balance Sheet Data - these concepts work reliably
         assets_data = edgar_client.get_financial_data_with_alternatives(cik, 
-            ['Assets', 'TotalAssets', 'AssetsTotal'])
+            ['Assets', 'TotalAssets'])
         liabilities_data = edgar_client.get_financial_data_with_alternatives(cik,
-            ['Liabilities', 'TotalLiabilities', 'LiabilitiesTotal'])
+            ['Liabilities', 'TotalLiabilities'])
         
         if assets_data and liabilities_data:
             latest_assets = get_latest_annual_value(assets_data)
@@ -665,135 +702,74 @@ def screen_stock(ticker: str) -> Dict[str, Any]:
                 metrics['total_assets'] = latest_assets
                 metrics['total_liabilities'] = latest_liabilities
                 
-                # Calculate Balance Sheet Ratio
                 if latest_assets > 0:
                     metrics['Balance Sheet Ratio'] = latest_assets / latest_liabilities
 
-        # 3. Free Cash Flow data for FCF Yield
-        operating_cash_flow = edgar_client.get_financial_data_with_alternatives(cik,
-            ['NetCashProvidedByUsedInOperatingActivities', 
-             'OperatingCashFlow',
-             'CashFlowFromOperations',
-             'NetCashProvidedByOperatingActivities',
-             'CashFlowsFromUsedInOperatingActivities'])
-        
-        capex = edgar_client.get_financial_data_with_alternatives(cik,
-            ['PaymentsToAcquirePropertyPlantAndEquipment',
-             'CapitalExpenditures',
-             'PaymentsForPropertyPlantAndEquipment',
-             'InvestmentsInPropertyPlantAndEquipment',
-             'CapitalExpendituresIncurredButNotYetPaid',
-             'PaymentsToAcquireProductiveAssets'])
+                # Calculate book value and P/B ratio
+                book_value = latest_assets - latest_liabilities
+                if book_value > 0 and metrics.get('Market Cap'):
+                    metrics['P/B'] = metrics['Market Cap'] / book_value
 
-        # For financial companies, try alternative cash flow metrics
-        if not operating_cash_flow or not capex:
-            sector_metrics = edgar_client.get_sector_specific_metrics(cik, ticker)
-            if sector_metrics:
-                # For financial companies, use change in cash and investments as proxy for FCF
-                cash_and_investments = edgar_client.get_financial_data_with_alternatives(cik,
-                    ['CashAndCashEquivalentsAtCarryingValue',
-                     'CashAndShortTermInvestments',
-                     'MarketableSecurities'])
-                if cash_and_investments:
-                    latest_cash = get_latest_annual_value(cash_and_investments)
-                    if latest_cash is not None:
-                        # Use change in cash position as proxy for FCF
-                        fcf = latest_cash - (sector_metrics.get('NoninterestExpense', 0) or 0)
-                        
-                        try:
-                            info = stock.info
-                            market_cap = info.get('marketCap')
-                            if market_cap and market_cap > 0:
-                                metrics['FCF Yield (%)'] = (fcf / market_cap) * 100
-                        except Exception as e:
-                            logger.error(f"Error calculating FCF yield for {ticker}: {e}")
-        else:
-            latest_ocf = get_latest_annual_value(operating_cash_flow)
-            latest_capex = get_latest_annual_value(capex)
-            
-            if latest_ocf and latest_capex:
-                fcf = latest_ocf - abs(latest_capex)
-                try:
-                    info = stock.info
-                    market_cap = info.get('marketCap')
-                    if market_cap and market_cap > 0:
-                        metrics['FCF Yield (%)'] = (fcf / market_cap) * 100
-                        
-                        # Also calculate P/E since we have market cap
-                        if metrics.get('net_income') and metrics['net_income'] > 0:
-                            metrics['P/E'] = market_cap / metrics['net_income']
-                except Exception as e:
-                    logger.error(f"Error getting market data for {ticker}: {e}")
-
-        # 4. Book Value for P/B ratio
-        if 'total_assets' in metrics and 'total_liabilities' in metrics:
-            book_value = metrics['total_assets'] - metrics['total_liabilities']
-            try:
-                info = stock.info
-                market_cap = info.get('marketCap')
-                if market_cap and market_cap > 0 and book_value > 0:
-                    metrics['P/B'] = market_cap / book_value
-                    if 'P/E' in metrics:
-                        metrics['P/E×P/B'] = metrics['P/E'] * metrics['P/B']
-            except Exception as e:
-                logger.error(f"Error calculating P/B ratio for {ticker}: {e}")
-
-        # 5. Calculate ROIC
-        try:
-            # For financial companies, use Return on Assets (ROA) as a proxy for ROIC
-            if 'total_assets' in metrics:
-                operating_income = edgar_client.get_financial_data_with_alternatives(cik,
-                    ['OperatingIncomeLoss', 
-                     'OperatingIncome', 
-                     'EBIT',
-                     'IncomeLossFromContinuingOperationsBeforeIncomeTaxes',
-                     'IncomeLossFromContinuingOperations',
-                     'OperatingIncomeLossIncludingIncomeLossFromEquityMethodInvestments',
-                     'InterestAndDividendIncomeOperating',  # Financial sector
-                     'NetInterestIncome'])  # Financial sector
+        # 3. Calculate P/E using reliable market cap and net income
+        if metrics.get('Market Cap') and metrics.get('net_income'):
+            if metrics['net_income'] > 0:
+                metrics['P/E'] = metrics['Market Cap'] / metrics['net_income']
                 
-                if operating_income:
-                    latest_operating_income = get_latest_annual_value(operating_income)
-                    
-                    # Estimate NOPAT (assuming 21% corporate tax rate)
-                    if latest_operating_income:
-                        nopat = latest_operating_income * (1 - 0.21)  # 21% corporate tax rate
-                        
-                        # For financial companies, use total assets as invested capital
-                        if ticker in ['MS', 'GS', 'JPM', 'BAC', 'C', 'WFC']:  # Financial sector
-                            invested_capital = metrics['total_assets']
-                        else:
-                            # Calculate Invested Capital
-                            current_liabilities = edgar_client.get_financial_data_with_alternatives(cik,
-                                ['LiabilitiesCurrent', 'CurrentLiabilities'])
-                            if current_liabilities:
-                                latest_current_liabilities = get_latest_annual_value(current_liabilities)
-                                if latest_current_liabilities:
-                                    # Invested Capital = Total Assets - Current Liabilities
-                                    invested_capital = metrics['total_assets'] - latest_current_liabilities
-                                else:
-                                    invested_capital = metrics['total_assets'] - metrics['total_liabilities']
-                            else:
-                                invested_capital = metrics['total_assets'] - metrics['total_liabilities']
-                        
-                        if invested_capital > 0:
-                            metrics['ROIC (%)'] = (nopat / invested_capital) * 100
-                            logger.info(f"Calculated ROIC for {ticker}: {metrics['ROIC (%)']}%")
-        except Exception as e:
-            logger.error(f"Error calculating ROIC for {ticker}: {str(e)}")
+                # Calculate P/E×P/B if both are available
+                if metrics.get('P/B'):
+                    metrics['P/E×P/B'] = metrics['P/E'] * metrics['P/B']
 
-        # 6. Dividend History
+        # 4. Cash Flow and ROIC
+        operating_cash_flow = edgar_client.get_financial_data_with_alternatives(cik,
+            ['NetCashProvidedByUsedInOperatingActivities',
+             'CashFlowFromOperations'])
+        
+        if operating_cash_flow:
+            latest_ocf = get_latest_annual_value(operating_cash_flow)
+            if latest_ocf:
+                # For FCF, use change in cash position for financial companies
+                if ticker in ['MS', 'GS', 'JPM', 'BAC', 'C', 'WFC']:
+                    cash_flow = latest_ocf
+                else:
+                    # For non-financials, subtract capex
+                    capex_data = edgar_client.get_financial_data_with_alternatives(cik,
+                        ['PaymentsToAcquirePropertyPlantAndEquipment',
+                         'CapitalExpenditures'])
+                    if capex_data:
+                        latest_capex = get_latest_annual_value(capex_data)
+                        if latest_capex:
+                            cash_flow = latest_ocf - abs(latest_capex)
+                        else:
+                            cash_flow = latest_ocf
+                    else:
+                        cash_flow = latest_ocf
+                
+                # Calculate FCF Yield
+                if cash_flow and metrics.get('Market Cap') and metrics['Market Cap'] > 0:
+                    metrics['FCF Yield (%)'] = (cash_flow / metrics['Market Cap']) * 100
+                
+                # Calculate ROIC
+                if metrics.get('total_assets'):
+                    # For financials, use ROA as proxy for ROIC
+                    if ticker in ['MS', 'GS', 'JPM', 'BAC', 'C', 'WFC']:
+                        invested_capital = metrics['total_assets']
+                    else:
+                        invested_capital = metrics['total_assets'] - metrics.get('total_liabilities', 0)
+                    
+                    if invested_capital > 0:
+                        # Use net income for NOPAT as it's more reliable
+                        if metrics.get('net_income'):
+                            metrics['ROIC (%)'] = (metrics['net_income'] / invested_capital) * 100
+
+        # 5. Dividend History using yfinance (reliable source)
         try:
             dividends = stock.dividends
             if not dividends.empty:
                 yearly_dividends = dividends.groupby(dividends.index.year).sum()
-                # Count years with positive dividends
-                positive_div_years = sum(1 for d in yearly_dividends if d > 0)
-                metrics['Positive Dividend Years'] = positive_div_years
+                metrics['Positive Dividend Years'] = sum(1 for d in yearly_dividends if d > 0)
                 
-                # Also include consecutive years of dividends
                 consecutive_years = 0
-                for div in reversed(yearly_dividends.values):  # Start from most recent
+                for div in reversed(yearly_dividends.values):
                     if div > 0:
                         consecutive_years += 1
                     else:
@@ -831,38 +807,125 @@ def get_latest_annual_value(data: Dict) -> Optional[float]:
         logger.error(f"Error getting latest value: {str(e)}")
         return None
 
+__version__ = '1.0.0'
+
+def save_results_csv(results: Dict[str, Any], filepath: str):
+    """Save screening results to CSV file"""
+    try:
+        # Convert the nested dictionary to a DataFrame
+        data = []
+        for ticker, metrics in results.items():
+            metrics['Ticker'] = ticker
+            data.append(metrics)
+        
+        df = pd.DataFrame(data)
+        
+        # Reorder columns to put Ticker first
+        cols = df.columns.tolist()
+        cols.insert(0, cols.pop(cols.index('Ticker')))
+        df = df[cols]
+        
+        # Save to CSV
+        df.to_csv(filepath, index=False)
+        logger.info(f"Results saved to {filepath}")
+    except Exception as e:
+        logger.error(f"Error saving results to CSV: {e}")
+
 def main():
-    parser = argparse.ArgumentParser(description='Value Stock Screener')
-    parser.add_argument('--output', type=str, default='screener_results.json',
-                       help='Output JSON file path')
+    parser = argparse.ArgumentParser(description='Value Stock Screener - Screen stocks using Graham value investing principles')
+    parser.add_argument('--output', type=str, default='screener_results.csv',
+                       help='Output file path (CSV format)')
+    parser.add_argument('--forceupdate', action='store_true',
+                       help='Force update of stock data instead of using cached data')
+    parser.add_argument('-v', action='count', default=0,
+                       help='Verbosity level (-v for summary, -vv for detailed criteria)')
+    parser.add_argument('--version', action='version',
+                       version=f'Value Stock Screener v{__version__}')
     args = parser.parse_args()
 
     # Get S&P 500 tickers
     tickers = get_sp500_tickers()
     logger.info(f"Retrieved {len(tickers)} tickers from S&P 500")
+    print(f"Retrieved {len(tickers)} tickers from S&P 500")  # Direct print as backup
 
-    # Screen each stock
     results = {}
+    stored_data = {}
+    all_tickers = tickers.copy()  # Keep track of all tickers for reporting
+
+    if not args.forceupdate:
+        # Try to load existing data
+        stored_data = load_stock_data()
+        if stored_data:
+            logger.info("Using cached stock data")
+            print("Using cached stock data")  # Direct print as backup
+            results = stored_data
+            # Only screen tickers that need updating
+            tickers = get_tickers_needing_update(stored_data, tickers)
+            if not tickers:
+                logger.info("All data is up to date")
+                print("All data is up to date")  # Direct print as backup
+
+    # Screen stocks that need updating
     for ticker in tickers:
-        logger.info(f"Screening {ticker}...")
+        if args.v < 1:
+            logger.info(f"Screening {ticker}...")
+            print(f"Screening {ticker}...")  # Direct print as backup
         metrics = screen_stock(ticker)
         if metrics:  # Only include stocks with data
+            meets_criteria, met_criteria = validate_against_criteria(metrics, 0)  # Don't output during screening
+            metrics['Meets All Criteria'] = meets_criteria
+            metrics['Met Criteria Count'] = len(met_criteria)
+            metrics['Met Criteria'] = met_criteria
             results[ticker] = metrics
-
-    # Calculate derived metrics
-    for ticker, metrics in results.items():
-        try:
-            # Remove the duplicate ROIC calculation here since it's now handled in screen_stock
-            pass
-        except Exception as e:
-            logger.error(f"Error calculating metrics for {ticker}: {str(e)}")
-
-    # Save results
-    with open(args.output, 'w') as f:
-        json.dump(results, f, indent=2)
-
-    logger.info(f"Screening complete. Processed {len(tickers)} stocks, found data for {len(results)} stocks.")
-    logger.info(f"Results saved to {args.output}")
+    
+    # Always process and save results
+    if results:
+        # Save both JSON and CSV formats
+        save_stock_data(results)  # Save JSON for caching
+        save_results_csv(results, args.output)  # Save CSV for user
+    
+    print("\n===== RESULTS =====")  # Always show results header with direct print
+    
+    # Always display results based on verbosity level
+    passing_stocks = [ticker for ticker, metrics in results.items() 
+                     if metrics.get('Meets All Criteria', False)]
+    
+    if args.v == 0:  # Standard output mode
+        msg = f"Screening complete. Found data for {len(results)} stocks."
+        logger.info(msg)
+        print(msg)  # Direct print as backup
+        
+        msg = f"{len(passing_stocks)} stocks meet all Graham value criteria."
+        logger.info(msg)
+        print(msg)  # Direct print as backup
+        
+        if passing_stocks:
+            msg = f"Passing stocks: {', '.join(passing_stocks)}"
+            logger.info(msg)
+            print(msg)  # Direct print as backup
+    elif args.v == 1:  # Simple summary mode
+        msg = f"Screening complete. Found data for {len(results)} stocks."
+        print(msg)  # Direct print only, no logger
+        
+        # Show summary for all stocks - only print, don't log
+        print("Value criteria results:")
+        for ticker in all_tickers:
+            if ticker in results:
+                metrics = results[ticker]
+                total_criteria = 8  # Total number of criteria
+                met_count = metrics.get('Met Criteria Count', 0)
+                print(f"{ticker} {met_count} of {total_criteria} value criteria met")  # Direct print only
+    elif args.v >= 2:  # Detailed criteria mode
+        msg = f"Screening complete. Found data for {len(results)} stocks."
+        logger.info(msg)
+        print(msg)  # Direct print as backup
+        
+        # Show detailed criteria for all stocks
+        for ticker in all_tickers:
+            if ticker in results:
+                metrics = results[ticker]
+                print(f"\nDetailed criteria for {ticker}:")
+                validate_against_criteria(metrics, 2)  # This will print the detailed results
 
 if __name__ == "__main__":
     main()
