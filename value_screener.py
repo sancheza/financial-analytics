@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+__version__ = '1.0.4'
+
 import yfinance as yf
 import pandas as pd
 import datetime
@@ -18,6 +20,50 @@ from typing import Dict, Any, Optional, List, Tuple
 from alpha_vantage.fundamentaldata import FundamentalData
 from concurrent.futures import ThreadPoolExecutor  # Added for parallel processing
 import sys
+
+# Screening criteria settings
+SETTINGS = {
+    'PE_RATIO_MAX': 18,           # Default: 15
+    'PE_PB_COMBO_MAX': 150,      # Default: 22.5
+    'BALANCE_SHEET_RATIO_MIN': 2,  # Default: 2
+    'POSITIVE_EARNINGS_YEARS': 8,  # Default: 8
+    'FCF_YIELD_MIN': 5,           # Default: 8%
+    'ROIC_MIN': 10,               # Default: 10%
+    'DIVIDEND_HISTORY_YEARS': 5,  # Default: 10
+    'EARNINGS_GROWTH_MIN': 5,     # Default: 33%
+    'REQUEST_DELAY': 2,           # Delay between API requests in seconds
+    'DATA_MAX_AGE_DAYS': 7,        # Maximum age of data before requiring refresh
+    'ALPHA_VANTAGE_KEY': os.environ.get('ALPHA_VANTAGE_KEY', '')  # Get API key from environment variable
+}
+
+# Define data directory and file paths
+DATA_DIR = Path('data/json')
+DATA_FILE = DATA_DIR / 'stock_data.json'
+
+# Configure logging
+logging.basicConfig(
+    level=logging.WARNING,  # Default to WARNING level (3)
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    force=True  # Force reconfiguration
+)
+logger = logging.getLogger(__name__)
+# Ensure logging is properly configured for immediate output
+logger.setLevel(logging.WARNING)  # Default to WARNING level
+handler = logging.StreamHandler()
+handler.setLevel(logging.WARNING)  # Default to WARNING level
+logger.addHandler(handler)
+# Ensure stdout is flushed after each write
+import sys
+sys.stdout.reconfigure(line_buffering=True)
+
+# Define log level mapping for the --debug argument
+LOG_LEVELS = {
+    0: logging.CRITICAL,  # Only critical errors
+    1: logging.ERROR,     # Error and critical
+    2: logging.WARNING,   # Warning, error, and critical (default)
+    3: logging.INFO,      # Info, warning, error, and critical
+    4: logging.DEBUG,     # All messages including debug
+}
 
 class AlphaVantageClient:
     def __init__(self, api_key):
@@ -236,50 +282,6 @@ class EdgarClient:
                     metrics[primary] = val
         
         return metrics
-
-# Configure logging
-logging.basicConfig(
-    level=logging.WARNING,  # Default to WARNING level (3)
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    force=True  # Force reconfiguration
-)
-logger = logging.getLogger(__name__)
-# Ensure logging is properly configured for immediate output
-logger.setLevel(logging.WARNING)  # Default to WARNING level
-handler = logging.StreamHandler()
-handler.setLevel(logging.WARNING)  # Default to WARNING level
-logger.addHandler(handler)
-# Ensure stdout is flushed after each write
-import sys
-sys.stdout.reconfigure(line_buffering=True)
-
-# Define log level mapping for the --debug argument
-LOG_LEVELS = {
-    0: logging.CRITICAL,  # Only critical errors
-    1: logging.ERROR,     # Error and critical
-    2: logging.WARNING,   # Warning, error, and critical (default)
-    3: logging.INFO,      # Info, warning, error, and critical
-    4: logging.DEBUG,     # All messages including debug
-}
-
-# Screening criteria settings
-SETTINGS = {
-    'PE_RATIO_MAX': 18,           # Default: 15
-    'PE_PB_COMBO_MAX': 150,      # Default: 22.5
-    'BALANCE_SHEET_RATIO_MIN': 2,  # Default: 2
-    'POSITIVE_EARNINGS_YEARS': 8,  # Default: 8
-    'FCF_YIELD_MIN': 5,           # Default: 8%
-    'ROIC_MIN': 10,               # Default: 10%
-    'DIVIDEND_HISTORY_YEARS': 5,  # Default: 10
-    'EARNINGS_GROWTH_MIN': 5,     # Default: 33%
-    'REQUEST_DELAY': 2,           # Delay between API requests in seconds
-    'DATA_MAX_AGE_DAYS': 7,        # Maximum age of data before requiring refresh
-    'ALPHA_VANTAGE_KEY': os.environ.get('ALPHA_VANTAGE_KEY', '')  # Get API key from environment variable
-}
-
-# Define data directory and file paths
-DATA_DIR = Path('data/json')
-DATA_FILE = DATA_DIR / 'stock_data.json'
 
 def ensure_data_dir():
     """Make sure the data directory exists"""
@@ -716,7 +718,7 @@ def calculate_balance_sheet_ratio(sec_data: Dict) -> Optional[float]:
         logger.error(f"Error calculating balance sheet ratio: {e}")
         return None
 
-def modern_graham_screen(ticker: str, use_local: bool = False) -> Optional[Dict[str, Any]]:
+def modern_value_screen(ticker: str, use_local: bool = False) -> Optional[Dict[str, Any]]:
     """Screen a stock using Graham's criteria with SEC EDGAR data"""
     try:
         if use_local:
@@ -1041,8 +1043,6 @@ def get_latest_annual_value(data: Dict) -> Optional[float]:
     except Exception as e:
         logger.error(f"Error getting latest value: {str(e)}")
         return None
-
-__version__ = '1.0.0'
 
 def save_results_csv(results: Dict[str, Any], filepath: str):
     """Save screening results to CSV file"""
