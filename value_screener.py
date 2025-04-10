@@ -285,7 +285,7 @@ def get_sp500_tickers():
         # Clean ticker symbols
         tickers = [ticker.replace('.', '-') for ticker in tickers]  # Replace dots with hyphens for Yahoo Finance
         
-        logger.info(f"Retrieved {len(tickers)} tickers from S&P 500")
+        #logger.info(f"Retrieved {len(tickers)} tickers from S&P 500")
         return tickers
     except Exception as e:
         logger.error(f"Error retrieving S&P 500 tickers: {e}")
@@ -752,9 +752,9 @@ def validate_against_criteria(data: Dict, verbosity: int = 0) -> Tuple[bool, Lis
         total_criteria = len(criteria_results)
         
         # Output based on verbosity level
-        if verbosity >= 2:  # -vv mode: show detailed criteria
+        if verbosity >= 2:  # -vv mode: show detailed criteria with extra line spacing
             ticker = data.get('Ticker', 'Unknown')
-            print(f"\n{ticker} met {met_count}/{total_criteria} criteria:")
+            print(f"\n{ticker} - Met {met_count}/{total_criteria} criteria:")
             for i, (met, desc) in enumerate(criteria_results):
                 if met:
                     print(f"✓ {desc}")
@@ -987,19 +987,18 @@ def main():
 
     # Get S&P 500 tickers
     tickers = get_sp500_tickers()
-    logger.info(f"Retrieved {len(tickers)} tickers from S&P 500")
-    print(f"Retrieved {len(tickers)} tickers from S&P 500")  # Direct print as backup
+    print(f"Retrieved {len(tickers)} tickers from S&P 500")  # Only print once, logging happens in get_sp500_tickers()
     
     # Sort tickers alphabetically
     tickers.sort()
-    logger.info("Sorting tickers alphabetically")
-    print("Sorting tickers alphabetically")
+    #print("Sorting tickers alphabetically")
+    #logger.info("Sorting tickers alphabetically")
     
     # If test mode is active, limit the number of tickers
     if args.test > 0:
         tickers = tickers[:args.test]
-        logger.info(f"TEST MODE: Limited to {len(tickers)} tickers")
         print(f"TEST MODE: Limited to {len(tickers)} tickers")
+        logger.info(f"TEST MODE: Limited to {len(tickers)} tickers")
 
     results = {}
     stored_data = {}
@@ -1012,22 +1011,22 @@ def main():
             # Skip special keys like "Last Updated" that aren't ticker data
             ticker_keys = [k for k in stored_data.keys() if k not in ["Last Updated"]]
             if ticker_keys:
-                logger.info("Using cached stock data")
-                print("Using cached stock data")  # Direct print as backup
+                print("Using cached stock data")
+                #logger.info("Using cached stock data")
                 # Copy only valid ticker data
                 results = {k: v for k, v in stored_data.items() if k in ticker_keys and isinstance(v, dict)}
                 # Only screen tickers that need updating
                 tickers = get_tickers_needing_update(stored_data, tickers)
                 if not tickers:
+                    print("All data is up to date")
                     logger.info("All data is up to date")
-                    print("All data is up to date")  # Direct print as backup
 
     # Screen stocks that need updating
     for ticker in tickers:
         # Always show progress regardless of verbosity level
         if args.v == 0:
+            print(f"Screening {ticker}...")
             logger.info(f"Screening {ticker}...")
-            print(f"Screening {ticker}...")  # Direct print as backup
         
         metrics = screen_stock(ticker)
         if metrics:  # Only include stocks with data
@@ -1064,17 +1063,17 @@ def main():
     
     if args.v == 0:  # Standard output mode
         msg = f"Screening complete. Found data for {len(results)} stocks."
+        print(msg)
         logger.info(msg)
-        print(msg)  # Direct print as backup
         
         msg = f"{len(passing_stocks)} stocks meet all Graham value criteria."
+        print(msg)
         logger.info(msg)
-        print(msg)  # Direct print as backup
         
         if passing_stocks:
             msg = f"Passing stocks: {', '.join(passing_stocks)}"
+            print(msg)
             logger.info(msg)
-            print(msg)  # Direct print as backup
     elif args.v == 1:  # Simple summary mode
         msg = f"Screening complete. Found data for {len(results)} stocks."
         print(msg)  # Direct print only, no logger
@@ -1086,8 +1085,8 @@ def main():
             print(f"Passing stocks: {', '.join(passing_stocks)}")
     elif args.v >= 2:  # Detailed criteria mode
         msg = f"Screening complete. Found data for {len(results)} stocks."
+        print(msg)
         logger.info(msg)
-        print(msg)  # Direct print as backup
         
         # We've already displayed detailed criteria for each stock during processing,
         # so just show a summary count of passing stocks
