@@ -1229,12 +1229,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
-  python value_screener.py                   # Screen all stocks using cached data if available
-  python value_screener.py --test 10         # Screen only 10 stocks (for testing)
-  python value_screener.py --forceupdate     # Force refresh of all stock data
-  python value_screener.py -v                # Show summary for each stock
-  python value_screener.py -vv               # Show detailed criteria for each stock
-  python value_screener.py --checkcriteria   # Analyze which criteria are most often met
+  python value_screener.py                            # Screen all stocks using cached data if available
+  python value_screener.py --test 10                  # Screen only 10 stocks (for testing)
+  python value_screener.py --forceupdate              # Force refresh of all stock data
+  python value_screener.py --verbosity 1              # Show summary for each stock
+  python value_screener.py --verbosity 2              # Show detailed criteria for each stock
+  python value_screener.py --checkcriteria            # Analyze which criteria are most often met
 '''
     )
     parser.add_argument('--output', type=str, default='screener_results.csv',
@@ -1243,9 +1243,9 @@ Examples:
                       help='Force update of all stock data instead of using cached data')
     parser.add_argument('--test', type=int, default=0,
                       help='Run with a limited number of tickers (for testing). Example: --test 10')
-    parser.add_argument('-v', action='count', default=0,
-                      help='Verbosity level (-v: show summary for each stock, -vv: show detailed criteria)')
-    parser.add_argument('--version', action='version',
+    parser.add_argument('--verbosity', '-V', type=int, choices=[0, 1, 2], default=0,
+                      help='Verbosity level (0: minimal output, 1: show summary for each stock, 2: show detailed criteria)')
+    parser.add_argument('-v', '--version', action='version',
                       version=f'Value Stock Screener v{__version__}',
                       help='Show the version number and exit')
     parser.add_argument('--checkcriteria', action='store_true',
@@ -1324,17 +1324,17 @@ Examples:
     # Process cached tickers without making external API calls
     def process_cached_ticker(ticker):
         """Process a ticker using cached data only - no API calls"""
-        if args.v == 0:
+        if args.verbosity == 0:
             # Always show progress, even in checkcriteria mode
             print(f"Validating cached data for {ticker}...")
             
         # Use the cached data without making external API calls
-        return validate_cached_stock(ticker, stored_data[ticker], args.v)
+        return validate_cached_stock(ticker, stored_data[ticker], args.verbosity)
     
     # Screen stocks that need fresh data
     def process_new_ticker(ticker):
         """Process a ticker by fetching fresh data from APIs"""
-        if args.v == 0:
+        if args.verbosity == 0:
             # Always show progress, even in checkcriteria mode
             print(f"Screening {ticker}...")
             logger.info(f"Screening {ticker}...")
@@ -1342,7 +1342,7 @@ Examples:
         metrics = screen_stock(ticker)
         if metrics:  # Only include stocks with data
             # Calculate criteria
-            meets_criteria, met_criteria = validate_against_criteria(metrics, args.v)
+            meets_criteria, met_criteria = validate_against_criteria(metrics, args.verbosity)
             metrics['Meets All Criteria'] = meets_criteria
             metrics['Met Criteria Count'] = len(met_criteria)
             metrics['Met Criteria'] = met_criteria
@@ -1422,7 +1422,7 @@ Examples:
         # Sort passing stocks alphabetically for consistent output
         passing_stocks.sort()
         
-        if args.v == 0:  # Standard output mode
+        if args.verbosity == 0:  # Standard output mode
             msg = f"Screening complete. Found data for {len(results)} stocks."
             print(msg)
             logger.info(msg)
@@ -1435,7 +1435,7 @@ Examples:
                 msg = f"Passing stocks: {', '.join(passing_stocks)}"
                 print(msg)
                 logger.info(msg)
-        elif args.v == 1:  # Simple summary mode
+        elif args.verbosity == 1:  # Simple summary mode
             msg = f"Screening complete. Found data for {len(results)} stocks."
             print(msg)
             
@@ -1444,7 +1444,7 @@ Examples:
             print(f"{len(passing_stocks)} stocks meet all Graham value criteria.")
             if passing_stocks:
                 print(f"Passing stocks: {', '.join(passing_stocks)}")
-        elif args.v >= 2:  # Detailed criteria mode
+        elif args.verbosity >= 2:  # Detailed criteria mode
             msg = f"Screening complete. Found data for {len(results)} stocks."
             print(msg)
             logger.info(msg)
