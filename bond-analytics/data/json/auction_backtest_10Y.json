@@ -1,0 +1,94 @@
+{
+  "auction_results": [
+    {
+      "auction_date": "2025-04-12",
+      "cusip": "912810A0",
+      "actual_yield": 4.231,
+      "predicted_yield": 4.231164750957853,
+      "error": 0.00016475095785306593,
+      "pct_error": 0.0038939011546458508,
+      "model_predictions": {
+        "rolling_5d": 4.231999999999999,
+        "rolling_10d": 4.209,
+        "rolling_20d": 4.256,
+        "linear_regression": 4.239471264367817,
+        "ensemble": 4.231164750957853
+      },
+      "adjustments": {},
+      "ensemble_method": "weighted"
+    },
+    {
+      "auction_date": "2025-01-12",
+      "cusip": "912810B1",
+      "actual_yield": 4.416,
+      "predicted_yield": 4.649996551724137,
+      "error": 0.23399655172413691,
+      "pct_error": 5.298834957521216,
+      "model_predictions": {
+        "rolling_5d": 4.682,
+        "rolling_10d": 4.633,
+        "rolling_20d": 4.5595,
+        "linear_regression": 4.765448275862069,
+        "ensemble": 4.649996551724137
+      },
+      "adjustments": {},
+      "ensemble_method": "weighted"
+    },
+    {
+      "auction_date": "2024-10-14",
+      "cusip": "912810C2",
+      "actual_yield": 4.401,
+      "predicted_yield": 3.9790440613026816,
+      "error": -0.4219559386973182,
+      "pct_error": -9.5877286684235,
+      "model_predictions": {
+        "rolling_5d": 4.0600000000000005,
+        "rolling_10d": 3.947,
+        "rolling_20d": 3.8364999999999996,
+        "linear_regression": 3.96816091954023,
+        "ensemble": 3.9790440613026816
+      },
+      "adjustments": {},
+      "ensemble_method": "weighted"
+    },
+    {
+      "auction_date": "2024-07-16",
+      "cusip": "912810D3",
+      "actual_yield": 4.261,
+      "predicted_yield": 4.264948275862069,
+      "error": 0.003948275862068584,
+      "pct_error": 0.09266078061648872,
+      "model_predictions": {
+        "rolling_5d": 4.2379999999999995,
+        "rolling_10d": 4.3020000000000005,
+        "rolling_20d": 4.2835,
+        "linear_regression": 4.249724137931036,
+        "ensemble": 4.264948275862069
+      },
+      "adjustments": {},
+      "ensemble_method": "weighted"
+    }
+  ],
+  "metrics": {
+    "mae": 0.16501637931034419,
+    "rmse": 0.2412554747803056,
+    "mape": 3.7457795769289626,
+    "bias": -0.0459615900383149,
+    "n_auctions": 4,
+    "max_error": 0.4219559386973182,
+    "min_error": 0.00016475095785306593,
+    "auction_dates_covered": [
+      "2025-04-12",
+      "2025-01-12",
+      "2024-10-14",
+      "2024-07-16"
+    ],
+    "best_model": "rolling_5d",
+    "model_errors": {
+      "rolling_5d": 0.15774999999999983,
+      "rolling_10d": 0.1835,
+      "rolling_20d": 0.18887500000000002,
+      "linear_regression": 0.20050862068965514
+    }
+  }
+}

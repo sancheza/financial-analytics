@@ -1,0 +1,474 @@
+2025-04-12 12:23:44,790 - __main__ - INFO - Processing 10Y bond
+2025-04-12 12:23:44,790 - src.data_fetcher - INFO - Fetching fresh data for 10Y
+2025-04-12 12:23:45,199 - src.data_fetcher - ERROR - Error fetching data from FRED: 400 Client Error: Bad Request for url: https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&api_key=ab12cd34ef56gh78ij90kl1234567890&file_type=json&observation_start=2024-04-12&observation_end=2025-04-12
+2025-04-12 12:23:45,205 - __main__ - ERROR - No data available for 10Y
+2025-04-12 12:26:41,580 - __main__ - INFO - Processing 10Y bond
+2025-04-12 12:26:41,581 - src.data_fetcher - INFO - Fetching fresh data for 10Y
+2025-04-12 12:26:41,928 - src.data_fetcher - ERROR - Error fetching data from FRED: 400 Client Error: Bad Request for url: https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&api_key=ab12cd34ef56gh78ij90kl1234567890&file_type=json&observation_start=2024-04-12&observation_end=2025-04-12
+2025-04-12 12:26:41,941 - __main__ - ERROR - No data available for 10Y
+2025-04-12 12:30:14,003 - __main__ - INFO - Processing 10Y bond
+2025-04-12 12:30:14,003 - src.data_fetcher - INFO - Fetching fresh data for 10Y
+2025-04-12 12:30:14,289 - src.data_fetcher - ERROR - Error saving 10Y data to cache: Object of type Timestamp is not JSON serializable
+2025-04-12 12:30:14,289 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 10Y
+2025-04-12 12:30:14,414 - src.data_fetcher - INFO - Saved 10Y auction data to cache
+2025-04-12 12:30:14,415 - __main__ - INFO - Found 0 10Y auctions
+2025-04-12 12:30:14,415 - __main__ - INFO - Backtesting 10Y predictions for 90 days
+2025-04-12 12:30:14,512 - src.predictor - ERROR - Error in ARIMA backtesting: 0
+2025-04-12 12:30:14,523 - src.predictor - ERROR - Error in Exponential Smoothing backtesting: 0
+2025-04-12 12:30:14,666 - src.predictor - INFO - Saved 10Y backtest results to ../data/json/backtest_10Y.json
+2025-04-12 12:30:14,709 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:30:14,717 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:30:14,719 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:30:15,664 - src.predictor - INFO - Saved visualization to ../data/plots/10Y_prediction.png
+2025-04-12 12:37:16,494 - __main__ - INFO - Backtesting 10Y against historical auction results
+2025-04-12 12:37:16,495 - src.data_fetcher - WARNING - Error reading cache file for 10Y: Expecting value: line 6 column 15 (char 101)
+2025-04-12 12:37:16,495 - src.data_fetcher - INFO - Fetching fresh data for 10Y
+2025-04-12 12:37:16,749 - src.data_fetcher - ERROR - Error saving 10Y data to cache: Object of type Timestamp is not JSON serializable
+2025-04-12 12:37:16,749 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 10Y
+2025-04-12 12:37:16,749 - src.data_fetcher - ERROR - Error parsing auction data: name 'np' is not defined
+2025-04-12 12:37:16,749 - __main__ - ERROR - No auction data available for 10Y
+2025-04-12 12:39:27,221 - __main__ - INFO - Backtesting 10Y against historical auction results
+2025-04-12 12:39:27,222 - src.data_fetcher - WARNING - Error reading cache file for 10Y: Expecting value: line 6 column 15 (char 101)
+2025-04-12 12:39:27,222 - src.data_fetcher - INFO - Fetching fresh data for 10Y
+2025-04-12 12:39:27,382 - src.data_fetcher - INFO - Saved 10Y data to cache
+2025-04-12 12:39:27,382 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 10Y
+2025-04-12 12:39:27,383 - src.data_fetcher - INFO - Saved 10Y auction data to cache
+2025-04-12 12:39:27,383 - __main__ - INFO - Found 24 10Y auctions. Using the last 20.
+2025-04-12 12:39:27,471 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:39:27,485 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:39:27,492 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:39:27,575 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:39:27,585 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:39:27,587 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:39:27,632 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:39:27,638 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:39:27,640 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:39:27,703 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:39:27,709 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:39:27,711 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:39:27,717 - __main__ - INFO - Saved 10Y auction backtest results to ../data/json/auction_backtest_10Y.json
+2025-04-12 12:41:34,029 - __main__ - INFO - Backtesting 20Y against historical auction results
+2025-04-12 12:41:34,029 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 12:41:34,262 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-12 12:41:34,262 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 12:41:34,263 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 12:41:34,263 - __main__ - INFO - Found 24 20Y auctions. Using the last 20.
+2025-04-12 12:41:34,347 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:41:34,358 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:41:34,366 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 12:41:34,397 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:41:34,404 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:41:34,407 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 12:41:34,478 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:41:34,486 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:41:34,488 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 12:41:34,522 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:41:34,527 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:41:34,530 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 12:41:34,534 - __main__ - INFO - Saved 20Y auction backtest results to ../data/json/auction_backtest_20Y.json
+2025-04-12 12:52:06,441 - __main__ - INFO - Backtesting 20Y against historical auction results
+2025-04-12 12:52:06,441 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 12:52:06,443 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 12:52:06,443 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 12:52:06,443 - __main__ - INFO - Found 24 20Y auctions. Using the last 20.
+2025-04-12 12:52:06,447 - __main__ - ERROR - Error processing auction on 2025-04-12: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,447 - __main__ - ERROR - Error processing auction on 2025-01-12: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,447 - __main__ - ERROR - Error processing auction on 2024-10-14: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,448 - __main__ - ERROR - Error processing auction on 2024-07-16: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,448 - __main__ - ERROR - Error processing auction on 2024-04-17: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,448 - __main__ - ERROR - Error processing auction on 2024-01-18: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,448 - __main__ - ERROR - Error processing auction on 2023-10-20: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,448 - __main__ - ERROR - Error processing auction on 2023-07-22: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,449 - __main__ - ERROR - Error processing auction on 2023-04-23: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,449 - __main__ - ERROR - Error processing auction on 2023-01-23: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,449 - __main__ - ERROR - Error processing auction on 2022-10-25: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,449 - __main__ - ERROR - Error processing auction on 2022-07-27: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,449 - __main__ - ERROR - Error processing auction on 2022-04-28: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,450 - __main__ - ERROR - Error processing auction on 2022-01-28: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,450 - __main__ - ERROR - Error processing auction on 2021-10-30: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,450 - __main__ - ERROR - Error processing auction on 2021-08-01: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,450 - __main__ - ERROR - Error processing auction on 2021-05-03: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,450 - __main__ - ERROR - Error processing auction on 2021-02-02: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,450 - __main__ - ERROR - Error processing auction on 2020-11-04: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:52:06,450 - __main__ - ERROR - Error processing auction on 2020-08-06: '<=' not supported between instances of 'str' and 'Timestamp'
+2025-04-12 12:56:01,760 - __main__ - INFO - Backtesting 20Y against historical auction results
+2025-04-12 12:56:01,761 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 12:56:01,765 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 12:56:01,766 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 12:56:01,766 - __main__ - INFO - Found 24 20Y auctions. Using the last 20.
+2025-04-12 12:56:01,979 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:56:01,996 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:56:02,009 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 12:56:02,178 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:56:02,186 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:56:02,190 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 12:56:02,308 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:56:02,314 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:56:02,316 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 12:56:02,409 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:56:02,414 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:56:02,416 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 12:56:02,421 - __main__ - INFO - Saved 20Y auction backtest results to ../data/json/auction_backtest_20Y.json
+2025-04-12 12:59:23,731 - __main__ - INFO - Backtesting 10Y against historical auction results
+2025-04-12 12:59:23,732 - src.data_fetcher - INFO - Using cached data for 10Y
+2025-04-12 12:59:23,736 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 10Y
+2025-04-12 12:59:23,737 - src.data_fetcher - INFO - Saved 10Y auction data to cache
+2025-04-12 12:59:23,737 - __main__ - INFO - Found 24 10Y auctions. Using the last 20.
+2025-04-12 12:59:23,803 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:59:23,812 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:59:23,816 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:59:23,886 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:59:23,892 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:59:23,895 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:59:23,935 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:59:23,941 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:59:23,943 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:59:23,993 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 12:59:23,998 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 12:59:24,001 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 12:59:24,005 - __main__ - INFO - Saved 10Y auction backtest results to ../data/json/auction_backtest_10Y.json
+2025-04-12 14:03:44,124 - src.predictor - WARNING - Backtest (10Y): Renamed 'value' column to 'yield'.
+2025-04-12 14:03:44,132 - src.predictor - INFO - Backtest (10Y): XGBoost is available and will be included
+2025-04-12 14:03:44,376 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:44,676 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:44,840 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:44,973 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:45,108 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:45,259 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:45,432 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:45,597 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:45,746 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:45,901 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:46,048 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:46,188 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:46,326 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:46,473 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:46,611 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:46,772 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:46,935 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:47,092 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:47,253 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:47,402 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:03:47,491 - src.predictor - INFO - Saved 10Y backtest metrics to ../data/json/metrics_10Y.json
+2025-04-12 14:07:14,343 - __main__ - INFO - Backtesting 1M against historical auction results
+2025-04-12 14:07:14,344 - src.data_fetcher - INFO - Fetching fresh data for 1M
+2025-04-12 14:07:14,344 - __main__ - ERROR - Error backtesting 1M against auctions: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:09:10,728 - __main__ - INFO - Backtesting 1M against historical auction results
+2025-04-12 14:09:10,729 - src.data_fetcher - INFO - Fetching fresh data for 1M
+2025-04-12 14:09:10,729 - __main__ - ERROR - Error backtesting 1M against auctions: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:10:38,713 - __main__ - INFO - Processing 1M bond
+2025-04-12 14:10:38,713 - src.data_fetcher - INFO - Fetching fresh data for 1M
+2025-04-12 14:10:38,713 - __main__ - ERROR - Error processing 1M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:13:56,692 - __main__ - INFO - Processing 1M bond
+2025-04-12 14:13:56,693 - src.data_fetcher - INFO - Fetching fresh data for 1M
+2025-04-12 14:13:56,693 - __main__ - ERROR - Error processing 1M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:13:56,695 - __main__ - ERROR - Traceback (most recent call last):
+  File "/Users/asanchez/dev/financial-analytics/bond-analytics/bond-yield-predictor/src/main.py", line 206, in predict_bond_yields
+    df = data_fetcher.get_treasury_data(bond_type, force_update)
+  File "/Users/asanchez/dev/financial-analytics/bond-analytics/bond-yield-predictor/src/data_fetcher.py", line 152, in get_treasury_data
+    df = self._get_fred_data(series_id)
+  File "/Users/asanchez/dev/financial-analytics/bond-analytics/bond-yield-predictor/src/data_fetcher.py", line 78, in _get_fred_data
+    end_date = datetime.datetime.now().strftime("%Y-%m-%d")
+               ^^^^^^^^^^^^^^^^^
+AttributeError: type object 'datetime.datetime' has no attribute 'datetime'
+
+2025-04-12 14:17:30,247 - __main__ - INFO - Processing 1M bond
+2025-04-12 14:17:30,248 - src.data_fetcher - INFO - Fetching fresh data for 1M
+2025-04-12 14:17:30,584 - src.data_fetcher - INFO - Saved 1M data to cache
+2025-04-12 14:17:30,584 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 1M
+2025-04-12 14:17:30,586 - src.data_fetcher - INFO - Saved 1M auction data to cache
+2025-04-12 14:17:30,586 - __main__ - INFO - Found 60 1M auctions
+2025-04-12 14:17:30,591 - src.predictor - INFO - Predicting 1M yield for 2025-04-11
+2025-04-12 14:17:30,591 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:17:30,753 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:17:30,863 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:17:30,863 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:17:32,185 - src.predictor - INFO - Saved visualization to ../data/plots/1M_prediction.png
+2025-04-12 14:18:51,046 - __main__ - INFO - Backtesting 1M against historical auction results
+2025-04-12 14:18:51,049 - src.data_fetcher - INFO - Using cached data for 1M
+2025-04-12 14:18:51,057 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 1M
+2025-04-12 14:18:51,058 - src.data_fetcher - INFO - Saved 1M auction data to cache
+2025-04-12 14:18:51,058 - __main__ - INFO - Found 60 1M auctions. Using the last 20.
+2025-04-12 14:18:51,063 - src.predictor - INFO - Predicting 1M yield for 2025-04-12
+2025-04-12 14:18:51,064 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:51,253 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:51,364 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:51,364 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:51,366 - src.predictor - INFO - Predicting 1M yield for 2025-04-05
+2025-04-12 14:18:51,366 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:51,451 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:51,538 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:51,538 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:51,540 - src.predictor - INFO - Predicting 1M yield for 2025-03-29
+2025-04-12 14:18:51,540 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:51,623 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:51,719 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:51,719 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:51,721 - src.predictor - INFO - Predicting 1M yield for 2025-03-22
+2025-04-12 14:18:51,721 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:51,819 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:51,903 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:51,903 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:51,905 - src.predictor - INFO - Predicting 1M yield for 2025-03-15
+2025-04-12 14:18:51,905 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:52,003 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:52,086 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:52,086 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:52,088 - src.predictor - INFO - Predicting 1M yield for 2025-03-08
+2025-04-12 14:18:52,088 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:52,198 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:52,290 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:52,290 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:52,291 - src.predictor - INFO - Predicting 1M yield for 2025-03-01
+2025-04-12 14:18:52,292 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:52,390 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:52,471 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:52,472 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:52,473 - src.predictor - INFO - Predicting 1M yield for 2025-02-22
+2025-04-12 14:18:52,473 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:52,548 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:52,635 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:52,635 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:52,637 - src.predictor - INFO - Predicting 1M yield for 2025-02-15
+2025-04-12 14:18:52,637 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:52,773 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:52,857 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:52,857 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:52,859 - src.predictor - INFO - Predicting 1M yield for 2025-02-08
+2025-04-12 14:18:52,859 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:52,943 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:53,026 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:53,026 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:53,028 - src.predictor - INFO - Predicting 1M yield for 2025-02-01
+2025-04-12 14:18:53,028 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:53,180 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:53,279 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:53,279 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:53,282 - src.predictor - INFO - Predicting 1M yield for 2025-01-25
+2025-04-12 14:18:53,283 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:53,356 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:53,487 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:53,488 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:53,492 - src.predictor - INFO - Predicting 1M yield for 2025-01-18
+2025-04-12 14:18:53,492 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:53,586 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:53,692 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:53,692 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:53,694 - src.predictor - INFO - Predicting 1M yield for 2025-01-11
+2025-04-12 14:18:53,694 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:53,781 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:53,874 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:53,874 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:53,876 - src.predictor - INFO - Predicting 1M yield for 2025-01-04
+2025-04-12 14:18:53,876 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:53,930 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:54,016 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:54,016 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:54,018 - src.predictor - INFO - Predicting 1M yield for 2024-12-28
+2025-04-12 14:18:54,018 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:54,075 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:54,163 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:54,163 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:54,164 - src.predictor - INFO - Predicting 1M yield for 2024-12-21
+2025-04-12 14:18:54,164 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:54,214 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:54,300 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:54,300 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:54,303 - src.predictor - INFO - Predicting 1M yield for 2024-12-14
+2025-04-12 14:18:54,304 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:54,449 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:54,534 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:54,534 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:54,537 - src.predictor - INFO - Predicting 1M yield for 2024-12-07
+2025-04-12 14:18:54,537 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:54,607 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:54,701 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:54,701 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:54,704 - src.predictor - INFO - Predicting 1M yield for 2024-11-30
+2025-04-12 14:18:54,704 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 14:18:54,787 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:18:54,872 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:18:54,872 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:18:54,874 - __main__ - INFO - Saved 1M auction backtest results to ../data/json/auction_backtest_1M.json
+2025-04-12 14:23:10,952 - __main__ - INFO - Backtesting 20Y against historical auction results
+2025-04-12 14:23:10,953 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 14:23:10,960 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 14:23:10,962 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 14:23:10,962 - __main__ - INFO - Found 24 20Y auctions. Using the last 20.
+2025-04-12 14:23:10,971 - src.predictor - INFO - Predicting 20Y yield for 2025-04-12
+2025-04-12 14:23:10,972 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 14:23:11,424 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:23:11,565 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 14:23:11,565 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:23:11,566 - src.predictor - INFO - Predicting 20Y yield for 2025-01-12
+2025-04-12 14:23:11,567 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 14:23:11,842 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:23:11,944 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 14:23:11,944 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:23:11,945 - src.predictor - INFO - Predicting 20Y yield for 2024-10-14
+2025-04-12 14:23:11,946 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 14:23:12,178 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:23:12,267 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 14:23:12,267 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:23:12,269 - src.predictor - INFO - Predicting 20Y yield for 2024-07-16
+2025-04-12 14:23:12,269 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 14:23:12,439 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:23:12,510 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 14:23:12,510 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:23:12,517 - __main__ - INFO - Saved 20Y auction backtest results to ../data/json/auction_backtest_20Y.json
+2025-04-12 14:24:28,292 - __main__ - INFO - Processing 20Y bond
+2025-04-12 14:24:28,293 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 14:24:28,295 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 14:24:28,295 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 14:24:28,303 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 14:24:28,304 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 14:24:28,730 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:24:28,856 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 14:24:28,856 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:24:29,785 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 15:11:16,789 - __main__ - INFO - Processing 10Y bond
+2025-04-12 15:11:16,790 - src.data_fetcher - INFO - Using cached data for 10Y
+2025-04-12 15:11:16,792 - src.data_fetcher - INFO - Using cached auction data for 10Y
+2025-04-12 15:11:16,792 - __main__ - INFO - Found 24 10Y auctions
+2025-04-12 15:11:16,801 - src.predictor - INFO - Predicting 10Y yield for 2025-04-11
+2025-04-12 15:11:16,801 - src.data_fetcher - INFO - Using cached auction data for 10Y
+2025-04-12 15:11:16,801 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_10Y.json
+2025-04-12 15:11:16,926 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 15:11:17,058 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_10Y.json.
+2025-04-12 15:11:17,058 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 15:11:17,579 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 16:20:41,847 - __main__ - INFO - Processing 1M bond
+2025-04-12 16:20:41,848 - src.data_fetcher - INFO - Using cached data for 1M
+2025-04-12 16:20:41,851 - src.data_fetcher - INFO - Using cached auction data for 1M
+2025-04-12 16:20:41,852 - __main__ - INFO - Found 60 1M auctions
+2025-04-12 16:20:41,861 - src.predictor - INFO - Predicting 1M yield for 2025-04-11
+2025-04-12 16:20:41,861 - src.data_fetcher - INFO - Using cached auction data for 1M
+2025-04-12 16:20:41,861 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_1M.json. Dynamic ensemble will use fallback weights.
+2025-04-12 16:20:42,100 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 16:20:42,261 - src.predictor - INFO - Applied auction proximity boost: 1.0x to pre-auction weighted prediction (days to auction: 8)
+2025-04-12 16:20:42,261 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_1M.json.
+2025-04-12 16:20:42,262 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 16:20:42,760 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 16:20:45,942 - __main__ - INFO - Processing 10Y bond
+2025-04-12 16:20:45,943 - src.data_fetcher - INFO - Using cached data for 10Y
+2025-04-12 16:20:45,943 - src.data_fetcher - INFO - Using cached auction data for 10Y
+2025-04-12 16:20:45,943 - __main__ - INFO - Found 24 10Y auctions
+2025-04-12 16:20:45,946 - src.predictor - INFO - Predicting 10Y yield for 2025-04-11
+2025-04-12 16:20:45,946 - src.data_fetcher - INFO - Using cached auction data for 10Y
+2025-04-12 16:20:45,946 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_10Y.json
+2025-04-12 16:20:46,042 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 16:20:46,167 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_10Y.json.
+2025-04-12 16:20:46,168 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 16:20:46,418 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 16:20:48,402 - __main__ - INFO - Processing 30Y bond
+2025-04-12 16:20:48,403 - src.data_fetcher - INFO - Fetching fresh data for 30Y
+2025-04-12 16:20:48,649 - src.data_fetcher - INFO - Saved 30Y data to cache
+2025-04-12 16:20:48,650 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 30Y
+2025-04-12 16:20:48,685 - src.data_fetcher - INFO - Saved 30Y auction data to cache
+2025-04-12 16:20:48,685 - __main__ - INFO - Found 24 30Y auctions
+2025-04-12 16:20:48,697 - src.predictor - INFO - Predicting 30Y yield for 2025-04-11
+2025-04-12 16:20:48,698 - src.data_fetcher - INFO - Using cached auction data for 30Y
+2025-04-12 16:20:48,699 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_30Y.json. Dynamic ensemble will use fallback weights.
+2025-04-12 16:20:49,136 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 16:20:49,302 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_30Y.json. Cannot calculate adaptive bias.
+2025-04-12 16:20:49,302 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 16:20:49,718 - src.predictor - INFO - Saved visualization to ../data/plots/30Y_prediction.png
+2025-04-12 16:22:01,036 - __main__ - INFO - Processing 20Y bond
+2025-04-12 16:22:01,037 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 16:22:01,039 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 16:22:01,039 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 16:22:01,050 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 16:22:01,050 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 16:22:01,051 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 16:22:01,375 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 16:22:01,606 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 16:22:01,606 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 16:22:02,183 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 16:32:10,717 - __main__ - INFO - Processing 20Y bond
+2025-04-12 16:32:10,717 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 16:32:10,719 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 16:32:10,719 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 16:32:10,724 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 16:32:10,724 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 16:32:10,725 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 16:32:11,102 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 16:32:11,233 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 16:32:11,233 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 16:32:12,120 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 17:03:31,647 - __main__ - INFO - Processing 20Y bond
+2025-04-12 17:03:31,647 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 17:03:31,850 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-12 17:03:31,850 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 17:03:31,851 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 17:03:31,851 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 17:03:31,854 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 17:03:31,855 - src.data_fetcher - INFO - Fetching fresh upcoming auction data from Treasury API
+2025-04-12 17:03:32,246 - src.data_fetcher - INFO - Saved upcoming auction data to cache with 100 entries
+2025-04-12 17:03:32,247 - src.data_fetcher - INFO - No upcoming auctions found for 20Y (Bond 20-Year)
+2025-04-12 17:03:32,247 - src.predictor - WARNING - Error calculating days to auction: strptime() argument 1 must be str, not tuple
+2025-04-12 17:03:32,248 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 17:03:32,713 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 17:03:32,882 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 17:03:32,882 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 17:03:33,656 - src.predictor - INFO - Saved visualization to ../data/plots/20Y_prediction.png
+2025-04-12 17:04:57,890 - __main__ - INFO - Processing 20Y bond
+2025-04-12 17:04:57,890 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 17:04:58,069 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-12 17:04:58,069 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 17:04:58,070 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 17:04:58,070 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 17:04:58,073 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 17:04:58,073 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-12 17:04:58,074 - src.data_fetcher - INFO - No upcoming auctions found for 20Y (Bond 20-Year)
+2025-04-12 17:04:58,074 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 17:04:58,391 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 17:04:58,487 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 17:04:58,487 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 17:04:58,994 - src.predictor - INFO - Saved visualization to ../data/plots/20Y_prediction.png
+2025-04-12 17:15:03,652 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 17:15:03,652 - src.data_fetcher - INFO - Fetching fresh upcoming auction data from Treasury API
+2025-04-12 17:15:04,028 - src.data_fetcher - INFO - Saved upcoming auction data to cache with 100 entries
+2025-04-12 17:15:04,028 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 17:15:04,028 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 17:15:04,028 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 17:15:04,029 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 17:15:04,029 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 17:15:04,029 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 17:15:47,490 - __main__ - INFO - Processing 20Y bond
+2025-04-12 17:15:47,491 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 17:15:47,493 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 17:15:47,493 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 17:15:47,501 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 17:15:47,501 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 17:15:47,502 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-12 17:15:47,502 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 17:15:47,502 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 17:15:47,502 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 17:15:47,502 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 17:15:47,502 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 17:15:47,502 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 17:15:47,502 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 17:15:47,810 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 17:15:47,935 - src.predictor - INFO - Applied auction proximity boost: 2.0x to pre-auction weighted prediction (days to auction: 5)
+2025-04-12 17:15:47,936 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 17:15:47,936 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 17:15:48,377 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 17:32:34,568 - __main__ - INFO - Processing 20Y bond
+2025-04-12 17:32:34,570 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 17:32:34,574 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 17:32:34,574 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 17:32:34,590 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 17:32:34,590 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 17:32:34,592 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-12 17:32:34,592 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 17:32:34,592 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 17:32:34,592 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 17:32:34,592 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 17:32:34,592 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 17:32:34,592 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 17:32:34,593 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 17:32:34,979 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 17:32:35,116 - src.predictor - INFO - Applied auction proximity boost: 2.0x to pre-auction weighted prediction (days to auction: 5)
+2025-04-12 17:32:35,117 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 17:32:35,117 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 17:32:35,774 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')

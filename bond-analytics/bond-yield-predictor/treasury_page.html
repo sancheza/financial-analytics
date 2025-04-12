@@ -1,0 +1,670 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="initial-scale=1">
+    <title>Upcoming Auctions — TreasuryDirect</title>
+    <link rel="stylesheet" type="text/css" href="/styles/style.css">
+    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
+    
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    
+    
+    <style>
+      .scrollButton:hover{
+        background-color: #0379ca;
+        opacity: 100% !important;
+      }
+    </style>
+    
+  </head>
+  <body>
+
+    
+
+    <div class="container">
+      <a class="sr-only sr-only-focusable" href="#main">Skip Navigation</a>
+    </div>
+
+    
+
+    
+  
+<div class="text-white bg-usa-blue-dark" role="banner">
+
+  <div class="container-xxl">
+    <div class="row">
+    
+      <div class="col-md py-1 media small">
+        <img class="align-self-center mr-2" src="/images/icons/us_flag_small.png" alt="U.S. flag">
+        <div class="media-body">
+          <span class="mr-2">An official website of the United States government</span>
+          <a class="d-block d-md-inline-block text-td-blue-light arrow-collapse" role="button" href="#" data-toggle="collapse" data-target="#official-site-collapse" aria-expanded="false" aria-controls="official-site-collapse">
+            Here’s how you know
+            <svg class="bi-chevron-down" width="1.1em" height="1.1em" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><path fill="currentColor" d="M143 352.3L7 216.3c-9.4-9.4-9.4-24.6 0-33.9l22.6-22.6c9.4-9.4 24.6-9.4 33.9 0l96.4 96.4 96.4-96.4c9.4-9.4 24.6-9.4 33.9 0l22.6 22.6c9.4 9.4 9.4 24.6 0 33.9l-136 136c-9.2 9.4-24.4 9.4-33.8 0z"/></svg>
+          </a>
+        </div>
+      </div>
+      
+      <div class="col-md py-1 border-top border-md-0 border-usa-gray-light small text-md-right">
+        <a class="text-white" href="https://www.treasury.gov" target="_blank" rel="nofollow noopener noreferrer">U.S. Department of the Treasury</a>
+      </div>
+      
+    </div>
+  </div>
+  
+  <div id="official-site-collapse" class="collapse container-xxl border-top border-md-0 border-usa-gray-light">
+    <div class="row">
+    
+      <div class="p-3 col-md-6">
+        <div class="media">
+          <img class="w-2-5em h-2-5em mr-2" src="/images/icons/icon-dot-gov.svg" alt="">
+          <div class="media-body">
+            <strong>Official websites use .gov</strong><br>
+            A <strong>.gov</strong> website belongs to an official government organization in the United States.
+          </div>
+        </div>
+      </div>
+      
+      <div class="p-3 col-md-6">
+        <div class="media">
+          <img class="w-2-5em h-2-5em mr-2" src="/images/icons/icon-https.svg" alt="">
+          <div class="media-body">
+            <strong>Secure .gov websites use HTTPS</strong><br>
+            A <strong>lock</strong> (<span class="icon-lock-white"></span>) or <strong>https://</strong> means you’ve safely connected to the .gov website. Share sensitive information only on official, secure websites.
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+  
+</div>
+
+  
+<header id="header-site" class="bg-white">
+
+  <div class="container-xxl">
+    <nav class="navbar navbar-expand-lg navbar-td p-0">
+      <a class="navbar-brand d-lg-none py-3" href="/"><img src="/images/logo-treasurydirect-color.svg" alt="TreasuryDirect Home"></a>
+
+      <button class="navbar-toggler btn btn-outline-td-blue nav-text-small shadow-none" data-toggle="collapse" data-target="#site-nav-collapse" aria-controls="site-nav-collapse" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="align-middle">Menu</span></button>
+
+      <div class="collapse navbar-collapse flex-wrap navbars" id="site-nav-collapse">
+
+        <a class="navbar-brand d-none d-lg-block py-lg-4 order-lg-0" href="/"><img src="/images/logo-treasurydirect-color.svg" alt="TreasuryDirect Home"></a>
+
+        <div class="navbar-nav ml-lg-auto align-items-center order-lg-2">
+          <a class="btn btn-sm btn-td-orange text-white shadow-none" href="/log-in/">Log In</a>
+
+          <form id="search-form-page-header" action="https://search.usa.gov/search" accept-charset="UTF-8" method="get" class="ml-lg-3 my-0 py-2">
+            <div class="input-group input-group-sm">
+              <input type="text" name="query" id="query-page-header" autocomplete="off" class="form-control" placeholder="Search…" aria-label="Search TreasuryDirect" aria-describedby="button-site-search-header-submit">
+              <input name="utf8" type="hidden" value="&#x2713;" aria-label="Search">
+              <input type="hidden" name="affiliate" id="affiliate" value="treasurydirect" aria-label="Search">
+              <div class="input-group-append">
+                <button class="btn btn-td-green font-weight-bold shadow-none" type="submit" id="button-site-search-header-submit" name="commit" data-disable-with="Search" aria-label="Submit">
+                  <span class="icon-search-solid-white"></span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <ul class="navbar-nav nav-text-large order-lg-3 pb-lg-2">
+          <li class="nav-item"><a class="nav-link" href="/"><span class="icon-home-solid-blue"></span></a></li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="site-nav-savings-bond-link" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Savings Bonds</a>
+
+            <div class="dropdown-menu" aria-labelledby="site-nav-savings-bond-link">
+              <div class="dropdown-menu-wrapper">
+                <a class="dropdown-item" href="/savings-bonds/">About U.S. Savings Bonds</a>
+                <a class="dropdown-item" href="/savings-bonds/buy-a-bond/">Buy a Bond</a>
+                <a class="dropdown-item" href="/savings-bonds/gift-a-bond/">Gift a Savings Bond</a>
+                <a class="dropdown-item" href="/savings-bonds/cashing-a-bond/">Cash In a Bond</a>
+                <a class="dropdown-item" href="/savings-bonds/savings-bond-calculator/">Savings Bond Value Calculator</a>
+                <a class="dropdown-item" href="/savings-bonds/manage-bonds/">Manage Bonds</a>
+                <a class="dropdown-item" href="/savings-bonds/forms/">Forms for Savings Bonds</a>
+                <a class="dropdown-item" href="/savings-bonds/treasury-hunt/">Treasury Hunt</a>
+              </div>
+            </div>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="site-nav-us-marketable-securities-link" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Treasury Marketable Securities</a>
+
+            <div class="dropdown-menu" aria-labelledby="site-nav-us-marketable-securities-link">
+              <div class="dropdown-menu-wrapper">
+                <a class="dropdown-item" href="/marketable-securities/">About Treasury Marketable Securities</a>
+                <a class="dropdown-item" href="/marketable-securities/treasury-bills/">Treasury Bills</a>
+                <a class="dropdown-item" href="/marketable-securities/treasury-bonds/">Treasury Bonds</a>
+                <a class="dropdown-item" href="/marketable-securities/treasury-notes/">Treasury Notes</a>
+                <a class="dropdown-item" href="/marketable-securities/tips/">TIPS</a>
+                <a class="dropdown-item" href="/marketable-securities/floating-rate-notes/">Floating Rate Notes (FRNs)</a>
+                <a class="dropdown-item" href="/marketable-securities/strips/">STRIPS</a>
+                <a class="dropdown-item" href="/marketable-securities/forms/">Forms for Treasury Marketable Securities</a>
+                <a class="dropdown-item" href="/savings-bonds/treasury-hunt/">Treasury Hunt</a>
+              </div>
+            </div>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="site-nav-auctions-link" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Auctions</a>
+
+            <div class="dropdown-menu" aria-labelledby="site-nav-auctions-link">
+              <div class="dropdown-menu-wrapper">
+                <a class="dropdown-item" href="/auctions/">About Auctions</a>
+                <a class="dropdown-item" href="/auctions/how-auctions-work/">How Auctions Work (Participating)</a>
+                <a class="dropdown-item" href="/auctions/when-auctions-happen/">When Auctions Happen (Schedules)</a>
+                <a class="dropdown-item" href="/auctions/reopenings/">Reopenings</a>
+                <a class="dropdown-item" href="/auctions/announcements-data-results/">Announcements, Data & Results</a>
+                <a class="dropdown-item" href="/auctions/announcements-data-results/buy-backs/">Buyback Announcements and Results</a>
+                <a class="dropdown-item" href="/auctions/upcoming/">Upcoming Auctions</a>
+                <a class="dropdown-item" href="/auctions/results/">Recent Auction Results</a>
+                <a class="dropdown-item" href="/auctions/auction-query/">Auction Search (Query)</a>
+                <a class="dropdown-item" href="/auctions/announcements-data-results/announcement-results-press-releases/treasury-marketable/">Auction Press Releases</a>
+                <a class="dropdown-item" href="/laws-and-regulations/auction-regulations-uoc/">Auction Regulations (UOC)</a>
+              </div>
+            </div>
+          </li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="site-nav-laws-link" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Laws and Regulations</a>
+
+            <div class="dropdown-menu" aria-labelledby="site-nav-laws-link">
+              <div class="dropdown-menu-wrapper">
+                <a class="dropdown-item" href="/laws-and-regulations/">About Laws and Regulations</a>
+                <a class="dropdown-item" href="/laws-and-regulations/auction-regulations-uoc/">Auction Regulations (UOC)</a>
+                <a class="dropdown-item" href="/laws-and-regulations/collateral-programs/">Collateral Programs</a>
+                <a class="dropdown-item" href="/laws-and-regulations/trades/">Commercial Book-Entry Regulations (TRADES)</a>
+                <a class="dropdown-item" href="/laws-and-regulations/fraud/">Frauds, Phonies, & Scams</a>
+                <a class="dropdown-item" href="/laws-and-regulations/gsa/">Government Securities Act (GSA) Regulations</a>
+                <a class="dropdown-item" href="/laws-and-regulations/gsa/lpr-reports/">Large Position Reporting (LPR)</a>
+                <a class="dropdown-item" href="/laws-and-regulations/buyback-rules/">Redemption Ops (Buyback) Rules</a>
+                <a class="dropdown-item" href="/laws-and-regulations/marketable-securities-laws-and-regulations/">Treasury Marketable Securities Regulations</a>
+                <a class="dropdown-item" href="/laws-and-regulations/savings-bond-regulations/">Savings Bond Regulations</a>
+                <a class="dropdown-item" href="/laws-and-regulations/treasury-direct-regulations/">TreasuryDirect Regulations</a>
+              </div>
+            </div>
+          </li>
+
+          <li class="nav-item"><a class="nav-link" href="/research-center/">Research Center</a></li>
+
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="site-nav-government-users-link" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Government Users</a>
+
+            <div class="dropdown-menu dropdown-menu-right dropdown-menu-xl-left" aria-labelledby="site-nav-government-users-link">
+              <div class="dropdown-menu-wrapper">
+                <a class="dropdown-item" href="/government/">For Government Users</a>
+                <a class="dropdown-item" href="/government/federal-investments-program/">Federal Investments Program</a>
+                <a class="dropdown-item" href="/government/slgs/">SLGS &amp; SLGSafe</a>
+                <a class="dropdown-item" href="/government/security-liquidation-proceeds/">Security Liquidation &amp; Proceeds</a>
+                <a class="dropdown-item" href="/government/federal-borrowings-program/">Federal Borrowings Program</a>
+                <a class="dropdown-item" href="/government/treasury-managed-accounts/">Treasury Managed Accounts</a>
+                <a class="dropdown-item" href="/government/funds-management-program-reports/">Funds Management Program Reports</a>
+                <a class="dropdown-item" href="/government/historical-debt-outstanding/">History of the Debt</a>
+                <a class="dropdown-item" href="/government/public-debt-reports/">Public Debt Reports </a>
+                <a class="dropdown-item" href="/government/interest-rates-and-prices/">Interest Rates and Prices </a>
+              </div>
+            </div>
+          </li>
+        </ul>
+
+        <ul class="navbar-nav nav-text-small order-lg-1">
+          <li class="nav-item"><a class="nav-link" href="/mailing-lists/">Mailing Lists</a></li>
+          <li class="nav-item"><a class="nav-link" href="/news/">News</a></li>
+          <li class="nav-item"><a class="nav-link" href="/about/">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="/forms/">Forms</a></li>
+          <li class="nav-item"><a class="nav-link" href="/help-center/">Help Center</a></li>
+          <li class="nav-item"><a class="nav-link" href="/contact-us/">Contact Us</a></li>
+        </ul>
+
+      </div>
+    </nav>
+  </div>
+
+</header>
+
+
+
+    <main id="main">
+
+      
+
+      
+  
+
+  
+<section>
+  <div class="section-container container-xxl">
+    
+  
+    
+<nav class="breadcrumb-container" aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    
+      <li class="breadcrumb-item"><a href="/auctions/">Auctions</a></li>
+    
+      <li style="padding-left: 0.2rem;">Upcoming Auctions</li>
+  </ol>
+</nav>
+
+  
+    
+<div class="body-copy">
+  
+    
+      <h1>Upcoming Auctions</h1>
+        <p>Whether you are participating in an auction, tracking its results, conducting research, or simply exploring how you can take advantage of U.S. Treasury marketable securities, we invite you to explore this site.</p>
+    
+</div>
+
+
+    
+
+    <p style="font-size:smaller; text-align: center; white-space: nowrap">
+        <span class="icon-angle-left-solid-blue"></span>
+        Table may scroll on smaller screens
+        <span class="icon-angle-right-solid-blue"></span>
+    </p>
+    <p style="font-size:smaller; text-align: center; white-space: nowrap; margin-top: -1rem">(use the scroll bar on the right to see the entire table)</p>
+
+
+    <ul class="nav nav-tabs td-color-tabs" id="institTab" role="tablist"> 
+      <li class="nav-item" role="presentation">
+        <a class="nav-link" id="auction-tab" data-toggle="tab" href="#auction" role="tab" aria-controls="auction" aria-selected="true">Auction Results</a>
+      </li>
+      <li class="nav-item" role="presentation">
+        <a class="nav-link active" id="upcoming-tab" data-toggle="tab" href="#upcoming" role="tab" aria-controls="upcoming" aria-selected="false">Upcoming Auctions</a>
+      </li>
+    </ul>
+    <div class="tab-content" id="myTabContent">
+      
+      <div class="tab-pane fade table-framed" id="auction" role="tabpanel" aria-labelledby="auction-tab">
+        <table id="institTableBills" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th>Bills</th>
+            <th>CMB</th>
+            <th>CUSIP</th>
+            <th>Issue Date</th>
+            <th>High Rate</th>
+            <th>Investment Rate</th>
+            <th>Price per $100</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+        <table id="institTableNotes" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th>Notes</th>
+            <th>Reopening</th>
+            <th>CUSIP</th>
+            <th>Issue Date</th>
+            <th>High Yield</th>
+            <th>Interest Rate</th>
+            <th>Price per $100</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+        <table id="institTableBonds" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th>Bonds</th>
+            <th>Reopening</th>
+            <th>CUSIP</th>
+            <th>Issue Date</th>
+            <th>High Yield</th>
+            <th>Interest Rate</th>
+            <th>Price per $100</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+        <table id="institTableTIPS" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th>TIPS</th>
+            <th>Reopening</th>
+            <th>CUSIP</th>
+            <th>Issue Date</th>
+            <th>High Yield</th>
+            <th>Interest Rate</th>
+            <th>Price per $100</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+        <table id="institTableFRN" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th>FRNs</th>
+            <th>Reopening</th>
+            <th>CUSIP</th>
+            <th>Issue Date</th>
+            <th>High Discount Margin</th>
+            <th>Spread</th>
+            <th>Price per $100</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="tab-pane fade show active table-framed" id="upcoming" role="tabpanel" aria-labelledby="upcoming-tab">
+        <table id="institTableBillsUpcoming" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th style="min-width: 140px">Bills</th>
+            <th style="min-width: 120px">CMB</th>
+            <th style="min-width: 120px">CUSIP</th>
+            <th style="min-width: 120px">Offering Amount</th>
+            <th style="min-width: 120px">Announcement Date</th>
+            <th style="min-width: 120px">Auction Date</th>
+            <th style="min-width: 120px">Issue Date</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+        <table id="institTableNotesUpcoming" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th style="min-width: 140px">Notes</th>
+            <th style="min-width: 120px">Reopening</th>
+            <th style="min-width: 120px">CUSIP</th>
+            <th style="min-width: 120px">Offering Amount</th>
+            <th style="min-width: 120px">Announcement Date</th>
+            <th style="min-width: 120px">Auction Date</th>
+            <th style="min-width: 120px">Issue Date</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+        <table id="institTableBondsUpcoming" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th style="min-width: 140px">Bonds</th>
+            <th style="min-width: 120px">Reopening</th>
+            <th style="min-width: 120px">CUSIP</th>
+            <th style="min-width: 120px">Offering Amount</th>
+            <th style="min-width: 120px">Announcement Date</th>
+            <th style="min-width: 120px">Auction Date</th>
+            <th style="min-width: 120px">Issue Date</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+        <table id="institTableTIPSUpcoming" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th style="min-width: 140px">TIPS</th>
+            <th style="min-width: 120px">Reopening</th>
+            <th style="min-width: 120px">CUSIP</th>
+            <th style="min-width: 120px">Offering Amount</th>
+            <th style="min-width: 120px">Announcement Date</th>
+            <th style="min-width: 120px">Auction Date</th>
+            <th style="min-width: 120px">Issue Date</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+        <table id="institTableFRNUpcoming" class="table table-striped table-hover no-margin-top">
+          <thead>
+          <tr class="bg-td-blue-lighter sticky-top">
+            <th style="min-width: 140px">FRNs</th>
+            <th style="min-width: 120px">Reopening</th>
+            <th style="min-width: 120px">CUSIP</th>
+            <th style="min-width: 120px">Offering Amount</th>
+            <th style="min-width: 120px">Announcement Date</th>
+            <th style="min-width: 120px">Auction Date</th>
+            <th style="min-width: 120px">Issue Date</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  
+  </div>
+</section>
+
+
+  
+<section class="colored blue">
+  <div class="section-container container-xxl">
+    
+  
+    
+<div class="body-copy">
+  
+    
+      <h2 class="h1">See Also...</h2>
+    
+    
+</div>
+
+  
+    
+<div class="card-deck">
+
+  
+    <div class="subpage-box card">
+      <a href="/auctions/results/">
+        <div class="card-body">
+          <p class="card-text">Recent Auction Results</p>
+            
+        </div>
+      </a>
+    </div>
+  
+    <div class="subpage-box card">
+      <a href="/auctions/auction-query/">
+        <div class="card-body">
+          <p class="card-text">Historical Auction Search</p>
+            
+        </div>
+      </a>
+    </div>
+  
+    <div class="subpage-box card">
+      <a href="/laws-and-regulations/">
+        <div class="card-body">
+          <p class="card-text">Laws, Regulations and Guidance</p>
+            
+        </div>
+      </a>
+    </div>
+  
+  
+</div>
+
+  
+  
+  </div>
+</section>
+
+
+
+
+      
+      <button type="button" class="btn btn-td-blue scrollButton d-print-none" onclick="topFunction()" id="myBtn" title="Back to Top" style="display: none; position: fixed; bottom: 1em; right: 1em; opacity: 50%; z-index: 99999999">
+        <svg class="bi-chevron-down" style="transform: rotate(180deg)" width="2em" height="2em" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
+          <path fill="currentColor" d="M143 352.3L7 216.3c-9.4-9.4-9.4-24.6 0-33.9l22.6-22.6c9.4-9.4 24.6-9.4 33.9 0l96.4 96.4 96.4-96.4c9.4-9.4 24.6-9.4 33.9 0l22.6 22.6c9.4 9.4 9.4 24.6 0 33.9l-136 136c-9.2 9.4-24.4 9.4-33.8 0z"></path>
+        </svg>
+      </button>
+
+    </main>
+
+    
+
+    
+  
+<footer>
+
+  <nav>
+    <div class="container-xxl hide-print">
+      <div class="wrapper py-5">
+      
+        <div class="row mb-4 text-md-center">
+          <div class="col-12">
+          
+            <a href="/"><img src="/images/logo-treasurydirect-color.svg" alt="TreasuryDirect Home"></a>
+            
+            <form id="search-form-page-footer" action="https://search.usa.gov/search" accept-charset="UTF-8" method="get" class="py-2 mx-md-auto">
+              <div class="input-group">
+                <input type="text" name="query" id="query-page-footer" autocomplete="off" class="form-control" placeholder="Search…" aria-label="Search TreasuryDirect" aria-describedby="button-site-search-footer-submit">
+                <input name="utf8" type="hidden" value="&#x2713;">
+                <input type="hidden" name="affiliate" id="affiliate2" value="treasurydirect">
+                <div class="input-group-append">
+                  <button class="btn btn-td-green font-weight-bold" type="submit" id="button-site-search-footer-submit" aria-label="Submit">
+                    <span class="icon-search-solid-white"></span>
+                  </button>
+                </div>
+              </div>
+            </form>
+            
+          </div>
+        </div>
+        
+        <div class="row">
+        
+          <div class="col-12 col-md-4">
+            <h3>Connect With Us</h3>
+            <ul class="list-unstyled nav-text-large social-icons">
+              <li><a class="no-icon" target="_blank" rel="noopener noreferrer nofollow" href="https://twitter.com/treasurydirect/"><span class="icon-twitter mr-2"></span>X (formerly Twitter)</a></li>
+              <li><a class="no-icon" target="_blank" rel="noopener noreferrer nofollow" href="https://www.facebook.com/fiscalservice/"><span class="icon-facebook mr-2"></span>Facebook</a></li>
+              <li><a class="no-icon" target="_blank" rel="noopener noreferrer nofollow" href="https://www.youtube.com/TreasuryDirect/"><span class="icon-youtube mr-2"></span>YouTube</a></li>
+              <li><a class="no-icon" href="/rss/"><span class="icon-rss mr-2"></span>RSS Feeds</a></li>
+            </ul>
+          </div>
+          
+          <div class="col-12 col-md-4">
+            <h3>Legal Information</h3>
+            <ul class="list-unstyled nav-text-small">
+              <li><a href="/legal-information/foia/">Freedom of Information Act</a></li>
+              <li><a href="/legal-information/privacy/">Privacy</a></li>
+              <li><a href="/legal-information/terms/">Terms & Conditions</a></li>
+              <li><a href="/legal-information/data-quality/">Data Quality</a></li>
+              <li><a href="/legal-information/developers/">For Web Developers</a></li>
+              <li><a href="/legal-information/accessibility/">Accessibility</a></li>
+            </ul>
+          </div>
+          
+          <div class="col-12 col-md-4">
+            <h3>Related Sites</h3>
+            <ul class="list-unstyled nav-text-small">
+              <li><a target="_blank" rel="noopener noreferrer" href="https://www.treasury.gov">treasury.gov</a></li>
+              <li><a target="_blank" rel="noopener noreferrer" href="https://fiscaldata.treasury.gov">fiscaldata.treasury.gov</a></li>
+              <li><a target="_blank" rel="noopener noreferrer" href="https://www.usaspending.gov">USAspending.gov</a></li>
+              <li><a target="_blank" rel="noopener noreferrer" href="https://fiscal.treasury.gov">Bureau of the Fiscal Service</a></li>
+              <li><a target="_blank" rel="noopener noreferrer" href="https://www.usa.gov">USA.gov</a></li>
+              <li><a target="_blank" rel="noopener noreferrer" href="https://www.data.gov">Data.gov</a></li>
+              <li><a target="_blank" rel="noopener noreferrer" href="https://www.regulations.gov">Regulations.gov</a></li>
+            </ul>
+          </div>
+          
+        </div>
+        
+      </div>
+    </div>
+  </nav>
+  
+</footer>
+
+
+    
+    <script src="/scripts/jquery.min.js" charset="utf-8"></script>
+    <script src="/scripts/bootstrap.bundle.min.js" charset="utf-8"></script>
+    <script src="/scripts/components.js" charset="utf-8"></script>
+    <script src="/scripts/back-to-top.js" charset="utf-8"></script>
+    <!-- START DAP Universal Analytics Code -->
+    <script id="_fed_an_ua_tag" src="https://dap.digitalgov.gov/Universal-Federated-Analytics-Min.js?agency=TRE&subagency=FS&exts=xml,prn,json,csv,tsv"></script>
+    <!-- END DAP Universal Analytics Code -->
+    <!-- Google Translate Code -->
+    <script type="text/javascript">
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+          pageLanguage: 'en',
+          floatPosition: google.translate.TranslateElement.FloatPosition.BOTTOM_RIGHT
+        });
+      }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <script type="text/javascript">
+      // ForeSee Production Embed Script v2.00
+      // DO NOT MODIFY BELOW THIS LINE *****************************************
+      ;(function (g) {
+        var d = document, am = d.createElement('script'), h = d.head || d.getElementsByTagName("head")[0], fsr = 'fsReady',
+                aex = {
+                  "src": "//gateway.foresee.com/sites/treasurydirect-gov/production/gateway.min.js",
+                  "type": "text/javascript",
+                  "async": "true",
+                  "data-vendor": "fs",
+                  "data-role": "gateway"
+                };
+        for (var attr in aex){am.setAttribute(attr, aex[attr]);}h.appendChild(am);g[fsr] = function () {var aT = '__' + fsr + '_stk__';g[aT] = g[aT] || [];g[aT].push(arguments);};
+      })(window);
+      // DO NOT MODIFY ABOVE THIS LINE *****************************************
+
+    </script>
+    
+  <script type="text/javascript" src="/scripts/auctions-section/auctWidget.js"></script>
+
+  </body>
+</html>

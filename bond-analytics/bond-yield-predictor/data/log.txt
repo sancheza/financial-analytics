@@ -1,0 +1,309 @@
+# Log file for bond yield predictor
+
+# This file logs key updates and events during the execution of the bond yield prediction script.
+# Each entry should include a timestamp, the event type (INFO, WARNING, ERROR), and a message describing the event.
+
+# Example log entry format:
+# [TIMESTAMP] [EVENT_TYPE] - MESSAGE
+
+# The log will be updated as the script runs, capturing important information and any errors encountered.2025-04-12 13:12:23,747 - __main__ - INFO - Processing 1M bond
+2025-04-12 13:12:23,748 - src.data_fetcher - INFO - Fetching fresh data for 1M
+2025-04-12 13:12:24,244 - src.data_fetcher - INFO - Saved 1M data to cache
+2025-04-12 13:12:24,245 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 1M
+2025-04-12 13:12:24,246 - src.data_fetcher - INFO - Saved 1M auction data to cache
+2025-04-12 13:12:24,246 - __main__ - INFO - Found 60 1M auctions
+2025-04-12 13:12:24,337 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:24,348 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:24,353 - src.predictor - INFO - Saved 1M prediction to ../data/json/metrics_1M.json
+2025-04-12 13:12:25,287 - src.predictor - INFO - Saved visualization to ../data/plots/1M_prediction.png
+2025-04-12 13:12:25,287 - __main__ - INFO - Processing 3M bond
+2025-04-12 13:12:25,287 - src.data_fetcher - INFO - Fetching fresh data for 3M
+2025-04-12 13:12:25,459 - src.data_fetcher - INFO - Saved 3M data to cache
+2025-04-12 13:12:25,460 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 3M
+2025-04-12 13:12:25,460 - src.data_fetcher - INFO - Saved 3M auction data to cache
+2025-04-12 13:12:25,460 - __main__ - INFO - Found 60 3M auctions
+2025-04-12 13:12:25,501 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:25,510 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:25,513 - src.predictor - INFO - Saved 3M prediction to ../data/json/metrics_3M.json
+2025-04-12 13:12:25,598 - src.predictor - INFO - Saved visualization to ../data/plots/3M_prediction.png
+2025-04-12 13:12:25,599 - __main__ - INFO - Processing 6M bond
+2025-04-12 13:12:25,599 - src.data_fetcher - INFO - Fetching fresh data for 6M
+2025-04-12 13:12:25,847 - src.data_fetcher - INFO - Saved 6M data to cache
+2025-04-12 13:12:25,847 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 6M
+2025-04-12 13:12:25,848 - src.data_fetcher - INFO - Saved 6M auction data to cache
+2025-04-12 13:12:25,848 - __main__ - INFO - Found 60 6M auctions
+2025-04-12 13:12:25,887 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:25,898 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:25,901 - src.predictor - INFO - Saved 6M prediction to ../data/json/metrics_6M.json
+2025-04-12 13:12:25,984 - src.predictor - INFO - Saved visualization to ../data/plots/6M_prediction.png
+2025-04-12 13:12:25,984 - __main__ - INFO - Processing 1Y bond
+2025-04-12 13:12:25,985 - src.data_fetcher - INFO - Fetching fresh data for 1Y
+2025-04-12 13:12:26,213 - src.data_fetcher - INFO - Saved 1Y data to cache
+2025-04-12 13:12:26,213 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 1Y
+2025-04-12 13:12:26,213 - src.data_fetcher - INFO - Saved 1Y auction data to cache
+2025-04-12 13:12:26,213 - __main__ - INFO - Found 36 1Y auctions
+2025-04-12 13:12:26,252 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:26,262 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:26,265 - src.predictor - INFO - Saved 1Y prediction to ../data/json/metrics_1Y.json
+2025-04-12 13:12:26,344 - src.predictor - INFO - Saved visualization to ../data/plots/1Y_prediction.png
+2025-04-12 13:12:26,344 - __main__ - INFO - Processing 2Y bond
+2025-04-12 13:12:26,344 - src.data_fetcher - INFO - Fetching fresh data for 2Y
+2025-04-12 13:12:26,609 - src.data_fetcher - INFO - Saved 2Y data to cache
+2025-04-12 13:12:26,609 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 2Y
+2025-04-12 13:12:26,610 - src.data_fetcher - INFO - Saved 2Y auction data to cache
+2025-04-12 13:12:26,610 - __main__ - INFO - Found 36 2Y auctions
+2025-04-12 13:12:26,642 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:26,651 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:26,654 - src.predictor - INFO - Saved 2Y prediction to ../data/json/metrics_2Y.json
+2025-04-12 13:12:26,732 - src.predictor - INFO - Saved visualization to ../data/plots/2Y_prediction.png
+2025-04-12 13:12:26,733 - __main__ - INFO - Processing 5Y bond
+2025-04-12 13:12:26,733 - src.data_fetcher - INFO - Fetching fresh data for 5Y
+2025-04-12 13:12:27,279 - src.data_fetcher - INFO - Saved 5Y data to cache
+2025-04-12 13:12:27,279 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 5Y
+2025-04-12 13:12:27,280 - src.data_fetcher - INFO - Saved 5Y auction data to cache
+2025-04-12 13:12:27,280 - __main__ - INFO - Found 36 5Y auctions
+2025-04-12 13:12:27,317 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:27,326 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:27,331 - src.predictor - INFO - Saved 5Y prediction to ../data/json/metrics_5Y.json
+2025-04-12 13:12:27,450 - src.predictor - INFO - Saved visualization to ../data/plots/5Y_prediction.png
+2025-04-12 13:12:27,450 - __main__ - INFO - Processing 7Y bond
+2025-04-12 13:12:27,450 - src.data_fetcher - INFO - Fetching fresh data for 7Y
+2025-04-12 13:12:27,783 - src.data_fetcher - INFO - Saved 7Y data to cache
+2025-04-12 13:12:27,783 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 7Y
+2025-04-12 13:12:27,784 - src.data_fetcher - INFO - Saved 7Y auction data to cache
+2025-04-12 13:12:27,784 - __main__ - INFO - Found 36 7Y auctions
+2025-04-12 13:12:27,828 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:27,837 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:27,840 - src.predictor - INFO - Saved 7Y prediction to ../data/json/metrics_7Y.json
+2025-04-12 13:12:27,928 - src.predictor - INFO - Saved visualization to ../data/plots/7Y_prediction.png
+2025-04-12 13:12:27,928 - __main__ - INFO - Processing 10Y bond
+2025-04-12 13:12:27,929 - src.data_fetcher - WARNING - Error reading cache file for 10Y: 'timestamp'
+2025-04-12 13:12:27,929 - src.data_fetcher - INFO - Fetching fresh data for 10Y
+2025-04-12 13:12:28,235 - src.data_fetcher - INFO - Saved 10Y data to cache
+2025-04-12 13:12:28,235 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 10Y
+2025-04-12 13:12:28,236 - src.data_fetcher - INFO - Saved 10Y auction data to cache
+2025-04-12 13:12:28,236 - __main__ - INFO - Found 24 10Y auctions
+2025-04-12 13:12:28,278 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:28,286 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:28,289 - src.predictor - INFO - Saved 10Y prediction to ../data/json/metrics_10Y.json
+2025-04-12 13:12:28,370 - src.predictor - INFO - Saved visualization to ../data/plots/10Y_prediction.png
+2025-04-12 13:12:28,370 - __main__ - INFO - Processing 20Y bond
+2025-04-12 13:12:28,370 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 13:12:28,839 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-12 13:12:28,839 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 13:12:28,840 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 13:12:28,840 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 13:12:29,019 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:29,030 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:29,034 - src.predictor - INFO - Saved 20Y prediction to ../data/json/metrics_20Y.json
+2025-04-12 13:12:29,119 - src.predictor - INFO - Saved visualization to ../data/plots/20Y_prediction.png
+2025-04-12 13:12:29,119 - __main__ - INFO - Processing 30Y bond
+2025-04-12 13:12:29,119 - src.data_fetcher - INFO - Fetching fresh data for 30Y
+2025-04-12 13:12:29,373 - src.data_fetcher - INFO - Saved 30Y data to cache
+2025-04-12 13:12:29,374 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 30Y
+2025-04-12 13:12:29,374 - src.data_fetcher - INFO - Saved 30Y auction data to cache
+2025-04-12 13:12:29,374 - __main__ - INFO - Found 24 30Y auctions
+2025-04-12 13:12:29,553 - src.predictor - ERROR - Error predicting with ARIMA: 0
+2025-04-12 13:12:29,561 - src.predictor - ERROR - Error predicting with Exponential Smoothing: 0
+2025-04-12 13:12:29,563 - src.predictor - INFO - Saved 30Y prediction to ../data/json/metrics_30Y.json
+2025-04-12 13:12:29,645 - src.predictor - INFO - Saved visualization to ../data/plots/30Y_prediction.png
+2025-04-12 13:33:38,778 - __main__ - INFO - Processing 1M bond
+2025-04-12 13:33:38,782 - __main__ - ERROR - Error processing 1M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,782 - __main__ - INFO - Processing 3M bond
+2025-04-12 13:33:38,782 - __main__ - ERROR - Error processing 3M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,782 - __main__ - INFO - Processing 6M bond
+2025-04-12 13:33:38,783 - __main__ - ERROR - Error processing 6M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,783 - __main__ - INFO - Processing 1Y bond
+2025-04-12 13:33:38,783 - __main__ - ERROR - Error processing 1Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,783 - __main__ - INFO - Processing 2Y bond
+2025-04-12 13:33:38,783 - __main__ - ERROR - Error processing 2Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,783 - __main__ - INFO - Processing 5Y bond
+2025-04-12 13:33:38,784 - __main__ - ERROR - Error processing 5Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,784 - __main__ - INFO - Processing 7Y bond
+2025-04-12 13:33:38,784 - __main__ - ERROR - Error processing 7Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,784 - __main__ - INFO - Processing 10Y bond
+2025-04-12 13:33:38,784 - __main__ - ERROR - Error processing 10Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,784 - __main__ - INFO - Processing 20Y bond
+2025-04-12 13:33:38,785 - __main__ - ERROR - Error processing 20Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:33:38,785 - __main__ - INFO - Processing 30Y bond
+2025-04-12 13:33:38,785 - __main__ - ERROR - Error processing 30Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,843 - __main__ - INFO - Processing 1M bond
+2025-04-12 13:35:07,844 - __main__ - ERROR - Error processing 1M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,844 - __main__ - INFO - Processing 3M bond
+2025-04-12 13:35:07,844 - __main__ - ERROR - Error processing 3M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,844 - __main__ - INFO - Processing 6M bond
+2025-04-12 13:35:07,845 - __main__ - ERROR - Error processing 6M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,845 - __main__ - INFO - Processing 1Y bond
+2025-04-12 13:35:07,845 - __main__ - ERROR - Error processing 1Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,845 - __main__ - INFO - Processing 2Y bond
+2025-04-12 13:35:07,845 - __main__ - ERROR - Error processing 2Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,845 - __main__ - INFO - Processing 5Y bond
+2025-04-12 13:35:07,845 - __main__ - ERROR - Error processing 5Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,845 - __main__ - INFO - Processing 7Y bond
+2025-04-12 13:35:07,846 - __main__ - ERROR - Error processing 7Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,846 - __main__ - INFO - Processing 10Y bond
+2025-04-12 13:35:07,846 - __main__ - ERROR - Error processing 10Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,846 - __main__ - INFO - Processing 20Y bond
+2025-04-12 13:35:07,846 - __main__ - ERROR - Error processing 20Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:35:07,846 - __main__ - INFO - Processing 30Y bond
+2025-04-12 13:35:07,847 - __main__ - ERROR - Error processing 30Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,436 - __main__ - INFO - Processing 1M bond
+2025-04-12 13:36:13,436 - __main__ - ERROR - Error processing 1M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,436 - __main__ - INFO - Processing 3M bond
+2025-04-12 13:36:13,437 - __main__ - ERROR - Error processing 3M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,437 - __main__ - INFO - Processing 6M bond
+2025-04-12 13:36:13,437 - __main__ - ERROR - Error processing 6M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,437 - __main__ - INFO - Processing 1Y bond
+2025-04-12 13:36:13,438 - __main__ - ERROR - Error processing 1Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,438 - __main__ - INFO - Processing 2Y bond
+2025-04-12 13:36:13,438 - __main__ - ERROR - Error processing 2Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,438 - __main__ - INFO - Processing 5Y bond
+2025-04-12 13:36:13,438 - __main__ - ERROR - Error processing 5Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,438 - __main__ - INFO - Processing 7Y bond
+2025-04-12 13:36:13,439 - __main__ - ERROR - Error processing 7Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,439 - __main__ - INFO - Processing 10Y bond
+2025-04-12 13:36:13,439 - __main__ - ERROR - Error processing 10Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,439 - __main__ - INFO - Processing 20Y bond
+2025-04-12 13:36:13,439 - __main__ - ERROR - Error processing 20Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:36:13,439 - __main__ - INFO - Processing 30Y bond
+2025-04-12 13:36:13,440 - __main__ - ERROR - Error processing 30Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,584 - __main__ - INFO - Processing 1M bond
+2025-04-12 13:39:43,584 - __main__ - ERROR - Error processing 1M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,584 - __main__ - INFO - Processing 3M bond
+2025-04-12 13:39:43,585 - __main__ - ERROR - Error processing 3M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,585 - __main__ - INFO - Processing 6M bond
+2025-04-12 13:39:43,585 - __main__ - ERROR - Error processing 6M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,585 - __main__ - INFO - Processing 1Y bond
+2025-04-12 13:39:43,585 - __main__ - ERROR - Error processing 1Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,586 - __main__ - INFO - Processing 2Y bond
+2025-04-12 13:39:43,586 - __main__ - ERROR - Error processing 2Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,586 - __main__ - INFO - Processing 5Y bond
+2025-04-12 13:39:43,586 - __main__ - ERROR - Error processing 5Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,586 - __main__ - INFO - Processing 7Y bond
+2025-04-12 13:39:43,586 - __main__ - ERROR - Error processing 7Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,587 - __main__ - INFO - Processing 10Y bond
+2025-04-12 13:39:43,587 - __main__ - ERROR - Error processing 10Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,587 - __main__ - INFO - Processing 20Y bond
+2025-04-12 13:39:43,587 - __main__ - ERROR - Error processing 20Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 13:39:43,587 - __main__ - INFO - Processing 30Y bond
+2025-04-12 13:39:43,587 - __main__ - ERROR - Error processing 30Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,275 - __main__ - INFO - Processing 1M bond
+2025-04-12 14:04:37,276 - __main__ - ERROR - Error processing 1M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,276 - __main__ - INFO - Processing 3M bond
+2025-04-12 14:04:37,276 - __main__ - ERROR - Error processing 3M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,277 - __main__ - INFO - Processing 6M bond
+2025-04-12 14:04:37,277 - __main__ - ERROR - Error processing 6M: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,277 - __main__ - INFO - Processing 1Y bond
+2025-04-12 14:04:37,277 - __main__ - ERROR - Error processing 1Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,277 - __main__ - INFO - Processing 2Y bond
+2025-04-12 14:04:37,277 - __main__ - ERROR - Error processing 2Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,278 - __main__ - INFO - Processing 5Y bond
+2025-04-12 14:04:37,278 - __main__ - ERROR - Error processing 5Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,278 - __main__ - INFO - Processing 7Y bond
+2025-04-12 14:04:37,278 - __main__ - ERROR - Error processing 7Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,278 - __main__ - INFO - Processing 10Y bond
+2025-04-12 14:04:37,278 - __main__ - ERROR - Error processing 10Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,278 - __main__ - INFO - Processing 20Y bond
+2025-04-12 14:04:37,279 - __main__ - ERROR - Error processing 20Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:04:37,279 - __main__ - INFO - Processing 30Y bond
+2025-04-12 14:04:37,279 - __main__ - ERROR - Error processing 30Y: type object 'datetime.datetime' has no attribute 'datetime'
+2025-04-12 14:21:43,017 - __main__ - INFO - Processing 1M bond
+2025-04-12 14:21:43,019 - src.data_fetcher - INFO - Using cached data for 1M
+2025-04-12 14:21:43,022 - src.data_fetcher - INFO - Using cached auction data for 1M
+2025-04-12 14:21:43,022 - __main__ - INFO - Found 60 1M auctions
+2025-04-12 14:21:43,037 - src.predictor - INFO - Predicting 1M yield for 2025-04-11
+2025-04-12 14:21:43,038 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_1M.json
+2025-04-12 14:21:43,448 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:43,953 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1M.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:43,953 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:46,241 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:46,244 - __main__ - INFO - Processing 3M bond
+2025-04-12 14:21:46,250 - src.data_fetcher - INFO - Using cached data for 3M
+2025-04-12 14:21:46,259 - src.data_fetcher - INFO - Using cached auction data for 3M
+2025-04-12 14:21:46,259 - __main__ - INFO - Found 60 3M auctions
+2025-04-12 14:21:46,264 - src.predictor - INFO - Predicting 3M yield for 2025-04-11
+2025-04-12 14:21:46,267 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_3M.json
+2025-04-12 14:21:46,455 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:46,569 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_3M.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:46,569 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:46,606 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:46,606 - __main__ - INFO - Processing 6M bond
+2025-04-12 14:21:46,609 - src.data_fetcher - INFO - Using cached data for 6M
+2025-04-12 14:21:46,611 - src.data_fetcher - INFO - Using cached auction data for 6M
+2025-04-12 14:21:46,611 - __main__ - INFO - Found 60 6M auctions
+2025-04-12 14:21:46,612 - src.predictor - INFO - Predicting 6M yield for 2025-04-11
+2025-04-12 14:21:46,613 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_6M.json
+2025-04-12 14:21:46,686 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:46,774 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_6M.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:46,774 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:46,804 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:46,804 - __main__ - INFO - Processing 1Y bond
+2025-04-12 14:21:46,805 - src.data_fetcher - INFO - Using cached data for 1Y
+2025-04-12 14:21:46,807 - src.data_fetcher - INFO - Using cached auction data for 1Y
+2025-04-12 14:21:46,807 - __main__ - INFO - Found 36 1Y auctions
+2025-04-12 14:21:46,808 - src.predictor - INFO - Predicting 1Y yield for 2025-04-11
+2025-04-12 14:21:46,811 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_1Y.json
+2025-04-12 14:21:46,912 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:47,010 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_1Y.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:47,010 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:47,111 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:47,111 - __main__ - INFO - Processing 2Y bond
+2025-04-12 14:21:47,116 - src.data_fetcher - INFO - Using cached data for 2Y
+2025-04-12 14:21:47,118 - src.data_fetcher - INFO - Using cached auction data for 2Y
+2025-04-12 14:21:47,118 - __main__ - INFO - Found 36 2Y auctions
+2025-04-12 14:21:47,119 - src.predictor - INFO - Predicting 2Y yield for 2025-04-11
+2025-04-12 14:21:47,120 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_2Y.json
+2025-04-12 14:21:47,198 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:47,305 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_2Y.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:47,305 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:47,334 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:47,334 - __main__ - INFO - Processing 5Y bond
+2025-04-12 14:21:47,337 - src.data_fetcher - INFO - Using cached data for 5Y
+2025-04-12 14:21:47,339 - src.data_fetcher - INFO - Using cached auction data for 5Y
+2025-04-12 14:21:47,339 - __main__ - INFO - Found 36 5Y auctions
+2025-04-12 14:21:47,341 - src.predictor - INFO - Predicting 5Y yield for 2025-04-11
+2025-04-12 14:21:47,342 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_5Y.json
+2025-04-12 14:21:47,427 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:47,524 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_5Y.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:47,525 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:47,553 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:47,553 - __main__ - INFO - Processing 7Y bond
+2025-04-12 14:21:47,554 - src.data_fetcher - INFO - Using cached data for 7Y
+2025-04-12 14:21:47,556 - src.data_fetcher - INFO - Using cached auction data for 7Y
+2025-04-12 14:21:47,556 - __main__ - INFO - Found 36 7Y auctions
+2025-04-12 14:21:47,557 - src.predictor - INFO - Predicting 7Y yield for 2025-04-11
+2025-04-12 14:21:47,559 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_7Y.json
+2025-04-12 14:21:47,661 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:47,762 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_7Y.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:47,762 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:47,794 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:47,794 - __main__ - INFO - Processing 10Y bond
+2025-04-12 14:21:47,795 - src.data_fetcher - INFO - Using cached data for 10Y
+2025-04-12 14:21:47,795 - src.data_fetcher - INFO - Using cached auction data for 10Y
+2025-04-12 14:21:47,795 - __main__ - INFO - Found 24 10Y auctions
+2025-04-12 14:21:47,796 - src.predictor - INFO - Predicting 10Y yield for 2025-04-11
+2025-04-12 14:21:47,797 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_10Y.json
+2025-04-12 14:21:47,896 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:47,994 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_10Y.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:47,994 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:48,021 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:48,021 - __main__ - INFO - Processing 20Y bond
+2025-04-12 14:21:48,023 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 14:21:48,024 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 14:21:48,024 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 14:21:48,025 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 14:21:48,025 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 14:21:48,398 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:48,512 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_20Y.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:48,512 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:48,544 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 14:21:48,544 - __main__ - INFO - Processing 30Y bond
+2025-04-12 14:21:48,547 - src.data_fetcher - INFO - Using cached data for 30Y
+2025-04-12 14:21:48,548 - src.data_fetcher - INFO - Using cached auction data for 30Y
+2025-04-12 14:21:48,548 - __main__ - INFO - Found 24 30Y auctions
+2025-04-12 14:21:48,549 - src.predictor - INFO - Predicting 30Y yield for 2025-04-11
+2025-04-12 14:21:48,550 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_30Y.json
+2025-04-12 14:21:48,890 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 14:21:49,010 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_30Y.json. Cannot calculate adaptive bias.
+2025-04-12 14:21:49,010 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 14:21:49,051 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')

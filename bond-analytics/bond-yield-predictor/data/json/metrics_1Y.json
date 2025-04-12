@@ -1,0 +1,25 @@
+{
+  "bond_type": "1Y",
+  "prediction_date": "2025-04-11",
+  "timestamp": "2025-04-12T13:12:26.214460",
+  "last_known_yield": 3.97,
+  "last_date": "2025-04-10",
+  "predictions": {
+    "rolling_5d": 3.91,
+    "rolling_10d": 3.9590000000000005,
+    "rolling_20d": 4.026,
+    "linear_regression": 3.963954022988506,
+    "ensemble": 3.9498636015325665
+  },
+  "backtest_metrics": {
+    "linear_regression": {
+      "mae": 0.053500828080583304,
+      "rmse": 0.06487833893476407,
+      "mape": 1.3357878017394684,
+      "r2": 0.2516831983563699
+    }
+  },
+  "adjustments": {},
+  "ensemble_method": "weighted",
+  "prediction_confidence": 0.9966085897245343
+}
