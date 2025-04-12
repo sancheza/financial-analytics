@@ -1,0 +1,27 @@
+{
+  "bond_type": "20Y",
+  "prediction_date": "2024-07-16",
+  "timestamp": "2025-04-12T12:56:02.317589",
+  "last_known_yield": 4.56,
+  "last_date": "2024-07-15",
+  "predictions": {
+    "rolling_5d": 4.548,
+    "rolling_10d": 4.598999999999999,
+    "rolling_20d": 4.5525,
+    "linear_regression": 4.52249494949495,
+    "ensemble": 4.361749719416386
+  },
+  "backtest_metrics": {
+    "linear_regression": {
+      "mae": 0.0629242570633875,
+      "rmse": 0.07950124930464533,
+      "mape": 1.365523049731341,
+      "r2": 0.26739465049319355
+    }
+  },
+  "adjustments": {
+    "bias_correction": -0.2
+  },
+  "ensemble_method": "weighted",
+  "prediction_confidence": 0.9989118452312629
+}

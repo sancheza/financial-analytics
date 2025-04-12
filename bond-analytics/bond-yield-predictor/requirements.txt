@@ -1,0 +1,9 @@
+requests
+pandas
+numpy
+statsmodels
+scikit-learn
+matplotlib
+python-dotenv
+beautifulsoup4
+pytest

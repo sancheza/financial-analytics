@@ -1,0 +1,445 @@
+{
+  "auction_results": [
+    {
+      "auction_date": "2025-04-12",
+      "cusip": "912796A0",
+      "actual_yield": 3.873,
+      "predicted_yield": 4.335223980916746,
+      "error": 0.4622239809167459,
+      "pct_error": 11.934520550393644,
+      "model_predictions": {
+        "rolling_5d": 4.36,
+        "rolling_10d": 4.368,
+        "rolling_20d": 4.366,
+        "arima": 4.36,
+        "exponential_smoothing": 4.358388009306147,
+        "linear_regression": 4.1730353144169845,
+        "xgboost": 4.361144542694092,
+        "ensemble": 4.335223980916746
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-04-05",
+      "cusip": "912796B1",
+      "actual_yield": 3.945,
+      "predicted_yield": 4.33908566536001,
+      "error": 0.3940856653600098,
+      "pct_error": 9.989497220786053,
+      "model_predictions": {
+        "rolling_5d": 4.372,
+        "rolling_10d": 4.368,
+        "rolling_20d": 4.367500000000001,
+        "arima": 4.360446516389984,
+        "exponential_smoothing": 4.358140739097905,
+        "linear_regression": 4.187205662225051,
+        "xgboost": 4.360306739807129,
+        "ensemble": 4.33908566536001
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-03-29",
+      "cusip": "912796C2",
+      "actual_yield": 4.282,
+      "predicted_yield": 4.348572803825348,
+      "error": 0.06657280382534836,
+      "pct_error": 1.5547128403864634,
+      "model_predictions": {
+        "rolling_5d": 4.364,
+        "rolling_10d": 4.365,
+        "rolling_20d": 4.37,
+        "arima": 4.379915962580532,
+        "exponential_smoothing": 4.378629626610813,
+        "linear_regression": 4.203117666889074,
+        "xgboost": 4.3793463706970215,
+        "ensemble": 4.348572803825348
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-03-22",
+      "cusip": "912796D3",
+      "actual_yield": 3.955,
+      "predicted_yield": 4.343081761938195,
+      "error": 0.3880817619381949,
+      "pct_error": 9.812433930169275,
+      "model_predictions": {
+        "rolling_5d": 4.3660000000000005,
+        "rolling_10d": 4.367,
+        "rolling_20d": 4.3695,
+        "arima": 4.360242067210277,
+        "exponential_smoothing": 4.357443044556788,
+        "linear_regression": 4.221176326261971,
+        "xgboost": 4.36021089553833,
+        "ensemble": 4.343081761938195
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-03-15",
+      "cusip": "912796E4",
+      "actual_yield": 3.938,
+      "predicted_yield": 4.3512462977184505,
+      "error": 0.41324629771845034,
+      "pct_error": 10.493811521545208,
+      "model_predictions": {
+        "rolling_5d": 4.368,
+        "rolling_10d": 4.375,
+        "rolling_20d": 4.371,
+        "arima": 4.366900696425394,
+        "exponential_smoothing": 4.367270526653706,
+        "linear_regression": 4.240742756579939,
+        "xgboost": 4.369810104370117,
+        "ensemble": 4.3512462977184505
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-03-08",
+      "cusip": "912796F5",
+      "actual_yield": 3.672,
+      "predicted_yield": 4.360808638779885,
+      "error": 0.6888086387798844,
+      "pct_error": 18.75840519553062,
+      "model_predictions": {
+        "rolling_5d": 4.382,
+        "rolling_10d": 4.372,
+        "rolling_20d": 4.373,
+        "arima": 4.3796131870305475,
+        "exponential_smoothing": 4.377118483239031,
+        "linear_regression": 4.261971125255776,
+        "xgboost": 4.379957675933838,
+        "ensemble": 4.360808638779885
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-03-01",
+      "cusip": "912796G6",
+      "actual_yield": 3.627,
+      "predicted_yield": 4.359574162288812,
+      "error": 0.7325741622888122,
+      "pct_error": 20.19779879483905,
+      "model_predictions": {
+        "rolling_5d": 4.362,
+        "rolling_10d": 4.367,
+        "rolling_20d": 4.368499999999999,
+        "arima": 4.378977990901785,
+        "exponential_smoothing": 4.3765708306849485,
+        "linear_regression": 4.283933006695694,
+        "xgboost": 4.380037307739258,
+        "ensemble": 4.359574162288812
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-02-22",
+      "cusip": "912796H7",
+      "actual_yield": 3.632,
+      "predicted_yield": 4.359455729523627,
+      "error": 0.7274557295236268,
+      "pct_error": 20.029067442831135,
+      "model_predictions": {
+        "rolling_5d": 4.372,
+        "rolling_10d": 4.3740000000000006,
+        "rolling_20d": 4.3845,
+        "arima": 4.35944533173995,
+        "exponential_smoothing": 4.355019706357275,
+        "linear_regression": 4.309965131281789,
+        "xgboost": 4.361259937286377,
+        "ensemble": 4.359455729523627
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-02-15",
+      "cusip": "912796I8",
+      "actual_yield": 3.364,
+      "predicted_yield": 4.369748658606703,
+      "error": 1.005748658606703,
+      "pct_error": 29.897403644670128,
+      "model_predictions": {
+        "rolling_5d": 4.376,
+        "rolling_10d": 4.369999999999999,
+        "rolling_20d": 4.396,
+        "arima": 4.372140576353441,
+        "exponential_smoothing": 4.364955354559599,
+        "linear_regression": 4.338421431805808,
+        "xgboost": 4.370723247528076,
+        "ensemble": 4.369748658606703
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-02-08",
+      "cusip": "912796J9",
+      "actual_yield": 3.298,
+      "predicted_yield": 4.375547167460797,
+      "error": 1.0775471674607973,
+      "pct_error": 32.67274613283194,
+      "model_predictions": {
+        "rolling_5d": 4.364,
+        "rolling_10d": 4.3870000000000005,
+        "rolling_20d": 4.4065,
+        "arima": 4.367910615707706,
+        "exponential_smoothing": 4.36483720167084,
+        "linear_regression": 4.368612986866083,
+        "xgboost": 4.369969367980957,
+        "ensemble": 4.375547167460797
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-02-01",
+      "cusip": "912796K0",
+      "actual_yield": 3.367,
+      "predicted_yield": 4.394581295032117,
+      "error": 1.0275812950321166,
+      "pct_error": 30.519194981648845,
+      "model_predictions": {
+        "rolling_5d": 4.41,
+        "rolling_10d": 4.422000000000001,
+        "rolling_20d": 4.4225,
+        "arima": 4.368421809039556,
+        "exponential_smoothing": 4.364714278438144,
+        "linear_regression": 4.403150877069626,
+        "xgboost": 4.37128210067749,
+        "ensemble": 4.394581295032117
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-01-25",
+      "cusip": "912796L1",
+      "actual_yield": 3.274,
+      "predicted_yield": 4.438363736596632,
+      "error": 1.1643637365966324,
+      "pct_error": 35.56395041529116,
+      "model_predictions": {
+        "rolling_5d": 4.433999999999999,
+        "rolling_10d": 4.426,
+        "rolling_20d": 4.4285000000000005,
+        "arima": 4.4486940605969085,
+        "exponential_smoothing": 4.444615946126449,
+        "linear_regression": 4.436486477517034,
+        "xgboost": 4.450249671936035,
+        "ensemble": 4.438363736596632
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-01-18",
+      "cusip": "912796M2",
+      "actual_yield": 3.366,
+      "predicted_yield": 4.431461948366586,
+      "error": 1.0654619483665857,
+      "pct_error": 31.653652654978774,
+      "model_predictions": {
+        "rolling_5d": 4.42,
+        "rolling_10d": 4.422,
+        "rolling_20d": 4.428,
+        "arima": 4.42745116852689,
+        "exponential_smoothing": 4.423711412525943,
+        "linear_regression": 4.470140774920493,
+        "xgboost": 4.428930282592773,
+        "ensemble": 4.431461948366586
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-01-11",
+      "cusip": "912796N3",
+      "actual_yield": 3.389,
+      "predicted_yield": 4.4341472111112274,
+      "error": 1.0451472111112277,
+      "pct_error": 30.839398380384413,
+      "model_predictions": {
+        "rolling_5d": 4.424,
+        "rolling_10d": 4.428,
+        "rolling_20d": 4.432499999999999,
+        "arima": 4.412666646653184,
+        "exponential_smoothing": 4.412901025759183,
+        "linear_regression": 4.509726145362565,
+        "xgboost": 4.419236660003662,
+        "ensemble": 4.4341472111112274
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2025-01-04",
+      "cusip": "912796O4",
+      "actual_yield": 3.653,
+      "predicted_yield": 4.455454934735032,
+      "error": 0.802454934735032,
+      "pct_error": 21.967011627019765,
+      "model_predictions": {
+        "rolling_5d": 4.432,
+        "rolling_10d": 4.434,
+        "rolling_20d": 4.463500000000001,
+        "arima": 4.433125152793403,
+        "exponential_smoothing": 4.432541369150979,
+        "linear_regression": 4.553355087851232,
+        "xgboost": 4.439662933349609,
+        "ensemble": 4.455454934735032
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2024-12-28",
+      "cusip": "912796P5",
+      "actual_yield": 3.838,
+      "predicted_yield": 4.472338472066103,
+      "error": 0.6343384720661032,
+      "pct_error": 16.527839293019884,
+      "model_predictions": {
+        "rolling_5d": 4.4399999999999995,
+        "rolling_10d": 4.438000000000001,
+        "rolling_20d": 4.5185,
+        "arima": 4.440269777992058,
+        "exponential_smoothing": 4.431514142637502,
+        "linear_regression": 4.59782545036148,
+        "xgboost": 4.44025993347168,
+        "ensemble": 4.472338472066103
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2024-12-21",
+      "cusip": "912796Q6",
+      "actual_yield": 3.632,
+      "predicted_yield": 4.486134546127409,
+      "error": 0.8541345461274088,
+      "pct_error": 23.51692032289121,
+      "model_predictions": {
+        "rolling_5d": 4.436,
+        "rolling_10d": 4.462,
+        "rolling_20d": 4.578,
+        "arima": 4.432143361898609,
+        "exponential_smoothing": 4.419911662121844,
+        "linear_regression": 4.644903659833323,
+        "xgboost": 4.429983139038086,
+        "ensemble": 4.486134546127409
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2024-12-14",
+      "cusip": "912796R7",
+      "actual_yield": 3.666,
+      "predicted_yield": 4.524194056832143,
+      "error": 0.8581940568321431,
+      "pct_error": 23.409548740647658,
+      "model_predictions": {
+        "rolling_5d": 4.4879999999999995,
+        "rolling_10d": 4.566,
+        "rolling_20d": 4.6425,
+        "arima": 4.422211472117723,
+        "exponential_smoothing": 4.417506141796426,
+        "linear_regression": 4.702433329229462,
+        "xgboost": 4.4307074546813965,
+        "ensemble": 4.524194056832143
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2024-12-07",
+      "cusip": "912796S8",
+      "actual_yield": 3.488,
+      "predicted_yield": 4.640611737749179,
+      "error": 1.152611737749179,
+      "pct_error": 33.045061288680586,
+      "model_predictions": {
+        "rolling_5d": 4.644,
+        "rolling_10d": 4.694,
+        "rolling_20d": 4.694500000000001,
+        "arima": 4.559136131844909,
+        "exponential_smoothing": 4.560985960686986,
+        "linear_regression": 4.760463515621051,
+        "xgboost": 4.571196556091309,
+        "ensemble": 4.640611737749179
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    },
+    {
+      "auction_date": "2024-11-30",
+      "cusip": "912796T9",
+      "actual_yield": 3.332,
+      "predicted_yield": 4.7523343129872275,
+      "error": 1.4203343129872277,
+      "pct_error": 42.62708022170551,
+      "model_predictions": {
+        "rolling_5d": 4.744,
+        "rolling_10d": 4.718999999999999,
+        "rolling_20d": 4.7165,
+        "arima": 4.76585237799019,
+        "exponential_smoothing": 4.755659612697023,
+        "linear_regression": 4.805477221372064,
+        "xgboost": 4.759850978851318,
+        "ensemble": 4.7523343129872275
+      },
+      "adjustments": {},
+      "ensemble_method": "dynamic_inverse_mae"
+    }
+  ],
+  "metrics": {
+    "mae": 0.7990483559011115,
+    "rmse": 0.8632830446986854,
+    "mape": 22.750502760012566,
+    "bias": 0.7990483559011115,
+    "n_auctions": 20,
+    "max_error": 1.4203343129872277,
+    "min_error": 0.06657280382534836,
+    "auction_dates_covered": [
+      "2025-04-12",
+      "2025-04-05",
+      "2025-03-29",
+      "2025-03-22",
+      "2025-03-15",
+      "2025-03-08",
+      "2025-03-01",
+      "2025-02-22",
+      "2025-02-15",
+      "2025-02-08",
+      "2025-02-01",
+      "2025-01-25",
+      "2025-01-18",
+      "2025-01-11",
+      "2025-01-04",
+      "2024-12-28",
+      "2024-12-21",
+      "2024-12-14",
+      "2024-12-07",
+      "2024-11-30"
+    ],
+    "timestamp": "2025-04-12T14:18:54.873004",
+    "best_model": "exponential_smoothing",
+    "model_errors": {
+      "rolling_5d": 0.7983499999999999,
+      "rolling_10d": 0.8066500000000001,
+      "rolling_20d": 0.8253250000000001,
+      "arima": 0.7902282451896524,
+      "exponential_smoothing": 0.7865717537338766,
+      "linear_regression": 0.8019454306819176
+    }
+  }
+}
