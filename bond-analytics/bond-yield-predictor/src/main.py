@@ -594,6 +594,44 @@ def predict_yield_command(args):
     return prediction
 
 
+def format_prediction(prediction: Dict[str, Any]) -> str:
+    """Format prediction results for display."""
+    bond_type = prediction.get('bond_type', 'Unknown')
+    prediction_date = prediction.get('prediction_date', 'Unknown')
+    next_auction = prediction.get('next_auction_date', 'None')
+    
+    # Format the output
+    output = f"=== Prediction for {bond_type} ===\n"
+    output += f"Prediction for {bond_type} Treasury Bond - {prediction_date}\n"
+    output += f"Next auction scheduled for: {next_auction}\n"
+    
+    # Last known data point
+    if 'last_value' in prediction and 'last_date' in prediction:
+        # No need to convert basis points, assuming values are already in percentage
+        last_value = prediction['last_value']
+        output += f"Last known yield: {last_value:.2f}% on {prediction['last_date']}\n"
+    
+    # Model predictions
+    output += "\nModel Predictions:\n"
+    if 'predictions' in prediction:
+        for model, value in prediction['predictions'].items():
+            # No need to convert basis points, assuming values are already in percentage
+            output += f"  {model}: {value:.4f}%\n"
+    
+    # Final prediction
+    if 'prediction' in prediction and prediction['prediction'] is not None:
+        # No need to convert basis points, assuming values are already in percentage
+        final_prediction = prediction['prediction']
+        output += f"\nPrediction: {final_prediction:.4f}%\n"
+    
+    # Confidence score
+    if 'prediction_confidence' in prediction:
+        confidence = prediction['prediction_confidence'] * 100  # Convert to percentage
+        output += f"Prediction Confidence: {confidence:.2f}%\n"
+    
+    return output
+
+
 def main():
     """Main function."""
     args = parse_args()

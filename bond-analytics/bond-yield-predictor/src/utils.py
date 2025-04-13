@@ -103,20 +103,31 @@ def format_prediction_output(prediction_data: Dict[str, Any]) -> str:
     if next_auction_date != 'Unknown':
         output.append(f"Next auction scheduled for: {next_auction_date}")
     
-    output.append(f"Last known yield: {last_yield:.1%} on {last_date}")
+    # Yields are already in percentage form (e.g. 4.90 means 4.90%)
+    output.append(f"Last known yield: {last_yield:.4f}% on {last_date}")
     output.append("")
+    
+    # Store ensemble prediction for the final prediction display
+    ensemble_prediction = None
     
     # Add model predictions
     if 'predictions' in prediction_data:
-        output.append("Model Predictions:")
+        output.append("Individual Model Predictions:")
         for model, value in prediction_data['predictions'].items():
-            output.append(f"  {model}: {value:.4%}")
+            if model == 'ensemble':
+                ensemble_prediction = value
+                continue
+            output.append(f"  {model}: {value:.4f}%")
+    
+    # Highlight the final prediction (ensemble) separately
+    if ensemble_prediction is not None:
+        output.append(f"\nFINAL PREDICTION: {ensemble_prediction:.4f}%")
     
     # Add prediction confidence
     if 'prediction_confidence' in prediction_data:
         confidence = prediction_data['prediction_confidence']
         confidence_pct = confidence * 100
-        output.append(f"\nPrediction Confidence: {confidence_pct:.2f}%")
+        output.append(f"Prediction Confidence: {confidence_pct:.2f}%")
     
     # Add backtest metrics for ensemble model
     if 'backtest_metrics' in prediction_data and 'ensemble' in prediction_data['backtest_metrics']:

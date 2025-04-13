@@ -142,13 +142,14 @@ class DataFetcher:
             logger.error(f"Error fetching data from FRED: {str(e)}")
             return pd.DataFrame()
     
-    def get_treasury_data(self, bond_type: str, force_update: bool = False) -> pd.DataFrame:
+    def get_treasury_data(self, bond_type: str, force_update: bool = False, end_date: Optional[str] = None) -> pd.DataFrame:
         """
         Get Treasury yield data for a specific bond type.
         
         Args:
             bond_type: Bond type (e.g., '10Y')
             force_update: If True, bypass cache and fetch fresh data
+            end_date: Optional end date for data retrieval (for back-testing)
             
         Returns:
             DataFrame with yield data
@@ -171,14 +172,21 @@ class DataFetcher:
                 # Use cache if it's less than a day old
                 if (now - last_fetch).days < 1 and 'data' in cached_data:
                     logger.info(f"Using cached data for {bond_type}")
-                    return pd.DataFrame(cached_data['data'])
+                    df = pd.DataFrame(cached_data['data'])
+                    
+                    # Apply end_date filter if specified (for back-testing)
+                    if end_date and 'date' in df.columns:
+                        df['date'] = pd.to_datetime(df['date'])
+                        df = df[df['date'] <= end_date]
+                    
+                    return df
             
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning(f"Error reading cache file for {bond_type}: {str(e)}")
         
         # Fetch fresh data from FRED
         logger.info(f"Fetching fresh data for {bond_type}")
-        df = self._get_fred_data(series_id)
+        df = self._get_fred_data(series_id, end_date=end_date)
         
         if df.empty:
             return df
@@ -203,14 +211,14 @@ class DataFetcher:
     
     def get_treasury_direct_auctions(self, bond_type: str, force_update: bool = False) -> List[Dict[str, Any]]:
         """
-        Get historical auction data from cache or generate mock data if needed.
+        Get historical auction data from TreasuryDirect website.
         
         Args:
             bond_type: Bond type (e.g., '10Y')
             force_update: If True, bypass cache and fetch fresh data
             
         Returns:
-            List of auction data dictionaries
+            List of auction data dictionaries with real historical data
         """
         cache_file = os.path.join(self.cache_dir, f"{bond_type}_auctions.json")
         
@@ -231,34 +239,92 @@ class DataFetcher:
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning(f"Error reading auction cache file for {bond_type}: {str(e)}")
         
-        logger.info(f"Fetching TreasuryDirect auction data for {bond_type}")
+        logger.info(f"Fetching real TreasuryDirect auction data for {bond_type}")
         
         try:
-            # Map bond type to TreasuryDirect term
-            treasury_term_map = {
-                '1M': '4-week',
-                '3M': '13-week',
-                '6M': '26-week',
-                '1Y': '52-week',
-                '2Y': '2-year',
-                '5Y': '5-year',
-                '7Y': '7-year',
-                '10Y': '10-year',
-                '20Y': '20-year',
-                '30Y': '30-year'
-            }
+            # Map bond type to TreasuryDirect security type and term
+            security_type = TREASURY_TYPE_MAP.get(bond_type)
+            security_term = TREASURY_TERM_MAP.get(bond_type)
             
-            term = treasury_term_map.get(bond_type)
-            if not term:
-                logger.warning(f"No TreasuryDirect term mapping for {bond_type}")
+            if not security_type or not security_term:
+                logger.warning(f"No TreasuryDirect mapping for {bond_type}")
                 return []
             
-            # For demonstration and testing purposes, we'll generate mock auction data
-            # that resembles what might come from TreasuryDirect
-            # In a production environment, this would be replaced with actual web scraping
+            # TreasuryDirect auction results API endpoint
+            url = "https://www.treasurydirect.gov/GA-FI/FedInvest/todaySecurityPriceData"
             
-            # Generate mock auctions (for historical testing)
-            auctions = self._generate_mock_auctions(bond_type)
+            # Parameters for the request
+            params = {
+                "pageNum": "1",
+                "security_type": security_type,  # "Note", "Bond", "Bill"
+                "security_term": security_term,  # "10-Year", "20-Year", etc.
+                "recordsPerPage": "20"
+            }
+            
+            # Make request to TreasuryDirect
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+            response = requests.get("https://www.treasurydirect.gov/TA_WS/securities/auctioned", headers=headers)
+            response.raise_for_status()
+            
+            # Parse the results - actual structure depends on TreasuryDirect API
+            all_auctions = response.json()
+            
+            # Filter to get relevant auctions matching our bond type
+            term_key = security_term.lower().replace('-', '')
+            type_key = security_type.lower()
+            
+            # Special case for 20Y bonds which might have different naming
+            if bond_type == '20Y':
+                matching_auctions = [
+                    a for a in all_auctions 
+                    if (a.get('securityType', '').lower() == type_key and
+                        ('20' in a.get('securityTerm', '').lower() or 
+                         '19' in a.get('securityTerm', '').lower()))
+                ]
+            else:
+                # Standard matching for other bond types
+                matching_auctions = [
+                    a for a in all_auctions
+                    if (a.get('securityType', '').lower() == type_key and
+                        term_key in a.get('securityTerm', '').lower().replace('-', '').replace(' ', ''))
+                ]
+            
+            # Convert to standard format
+            auctions = []
+            for auction in matching_auctions:
+                try:
+                    # Parse date correctly from ISO format
+                    date_str = auction.get('auctionDate', '')
+                    if date_str:
+                        # Format date as YYYY-MM-DD
+                        date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        formatted_date = date_obj.strftime('%Y-%m-%d')
+                    else:
+                        continue
+                    
+                    # Get yield information
+                    high_yield = auction.get('highRate') or auction.get('highYield') or auction.get('highDiscountRate')
+                    
+                    # Build auction record
+                    auction_record = {
+                        'date': formatted_date,
+                        'cusip': auction.get('cusip', ''),
+                        'high_yield': str(high_yield) if high_yield else '0.0'
+                    }
+                    auctions.append(auction_record)
+                except Exception as e:
+                    logger.warning(f"Error processing auction: {e}")
+                    continue
+            
+            # If we couldn't get data from TreasuryDirect API, try web scraping as fallback
+            if not auctions:
+                logger.warning("No auctions found from API, trying web scraping...")
+                auctions = self._scrape_treasury_direct_auctions(bond_type)
+            
+            # Sort by date (newest first)
+            auctions.sort(key=lambda x: x['date'], reverse=True)
             
             # Save to cache
             data_to_cache = {
@@ -270,107 +336,238 @@ class DataFetcher:
             with open(cache_file, 'w') as f:
                 json.dump(data_to_cache, f, indent=2)
             
-            logger.info(f"Saved {bond_type} auction data to cache")
+            logger.info(f"Saved real {bond_type} auction data to cache: {len(auctions)} auctions")
             return auctions
             
         except requests.RequestException as e:
             logger.error(f"Error fetching auction data from TreasuryDirect: {str(e)}")
-            return []
+            
+            # Fallback to web scraping if API request fails
+            logger.info(f"Trying web scraping as fallback...")
+            auctions = self._scrape_treasury_direct_auctions(bond_type)
+            
+            if auctions:
+                # Save to cache
+                data_to_cache = {
+                    'bond_type': bond_type,
+                    'timestamp': datetime.now().isoformat(),
+                    'auctions': auctions
+                }
+                
+                with open(cache_file, 'w') as f:
+                    json.dump(data_to_cache, f, indent=2)
+                
+                logger.info(f"Saved scraped {bond_type} auction data to cache: {len(auctions)} auctions")
+            
+            return auctions
+        
         except Exception as e:
             logger.error(f"Error parsing auction data: {str(e)}")
             return []
-            
-    def _generate_mock_auctions(self, bond_type: str) -> List[Dict[str, Any]]:
+    
+    def _scrape_treasury_direct_auctions(self, bond_type: str) -> List[Dict[str, Any]]:
         """
-        Generate mock auction data for testing when web scraping is not available.
+        Scrape historical auction data from TreasuryDirect website as fallback.
         
         Args:
             bond_type: Bond type (e.g., '10Y')
             
         Returns:
-            List of mock auction dictionaries
+            List of auction data dictionaries with real historical data
         """
-        # Base yields for different bond types
-        base_yields = {
-            '1M': 3.8,
-            '3M': 4.0,
-            '6M': 4.2,
-            '1Y': 4.3,
-            '2Y': 4.4,
-            '5Y': 4.3,
-            '7Y': 4.3,
-            '10Y': 4.2,
-            '20Y': 4.4,
-            '30Y': 4.5
-        }
-        
-        # CUSIP prefixes by bond type
-        cusip_prefixes = {
-            '10Y': '912810',
-            '20Y': '912810',
-            '30Y': '912810',
-            '7Y': '912828',
-            '5Y': '912828',
-            '2Y': '912828',
-            '1Y': '912796',
-            '6M': '912796',
-            '3M': '912796',
-            '1M': '912796'
-        }
-        
-        # Generate auctions
+        logger.info(f"Attempting to scrape TreasuryDirect auctions for {bond_type}")
         auctions = []
         
-        # End date is today
-        end_date = datetime.now()
+        try:
+            # Convert bond type to parameters needed for TreasuryDirect
+            security_type = TREASURY_TYPE_MAP.get(bond_type)
+            security_term = TREASURY_TERM_MAP.get(bond_type)
+            
+            if not security_type or not security_term:
+                logger.warning(f"No TreasuryDirect mapping for {bond_type}")
+                return []
+            
+            # Web scraping from TreasuryDirect auction archive page
+            base_url = "https://www.treasurydirect.gov/auctions/announcements-data-results/"
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+            
+            # HTML page from TreasuryDirect with results
+            response = requests.get(base_url, headers=headers)
+            response.raise_for_status()
+            
+            # Parse HTML content
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Look for auction results table
+            # This requires analyzing the structure of the TreasuryDirect website
+            # Note: Website structure may change, requiring updates to this parsing logic
+            
+            # Find the table rows with auction data
+            table = soup.find('table', {'class': 'auctions-table'})
+            if not table:
+                logger.warning("Couldn't find auction results table on TreasuryDirect")
+                return []
+                
+            rows = table.find_all('tr')
+            
+            # Process each row
+            for row in rows[1:]:  # Skip header row
+                cols = row.find_all('td')
+                if len(cols) < 6:
+                    continue
+                
+                # Extract relevant data from columns
+                auction_security_type = cols[0].get_text().strip()
+                auction_term = cols[1].get_text().strip()
+                auction_date = cols[2].get_text().strip()
+                cusip = cols[3].get_text().strip()
+                high_yield = cols[5].get_text().strip().replace('%', '')
+                
+                # Check if this row matches our bond type
+                is_match = False
+                
+                if security_type.lower() in auction_security_type.lower():
+                    if bond_type == '20Y':
+                        if '20' in auction_term or '19' in auction_term:
+                            is_match = True
+                    else:
+                        term_digit = security_term.split('-')[0]
+                        if term_digit in auction_term:
+                            is_match = True
+                
+                if is_match:
+                    # Parse date
+                    try:
+                        date_obj = datetime.strptime(auction_date, '%m/%d/%Y')
+                        formatted_date = date_obj.strftime('%Y-%m-%d')
+                    except ValueError:
+                        logger.warning(f"Invalid auction date format: {auction_date}")
+                        continue
+                    
+                    # Create auction record
+                    auction_record = {
+                        'date': formatted_date,
+                        'cusip': cusip,
+                        'high_yield': high_yield
+                    }
+                    auctions.append(auction_record)
+            
+            # Fallback to the Treasury fiscal data API if web scraping didn't work
+            if not auctions:
+                logger.info("Web scraping didn't find auctions, trying Treasury fiscal data API...")
+                auctions = self._fetch_treasury_fiscal_api_auctions(bond_type)
+                
+            return auctions
+            
+        except Exception as e:
+            logger.error(f"Error scraping TreasuryDirect auction data: {str(e)}")
+            return []
+    
+    def _fetch_treasury_fiscal_api_auctions(self, bond_type: str) -> List[Dict[str, Any]]:
+        """
+        Fetch auction data from Treasury Fiscal Data API as another fallback.
         
-        # Different bonds have different auction frequencies
-        if bond_type in ['1M', '3M', '6M']:
-            frequency_days = 7  # Weekly
-            n_auctions = 60  # About a year of weekly auctions
-        elif bond_type in ['1Y', '2Y', '5Y', '7Y']:
-            frequency_days = 30  # Monthly
-            n_auctions = 36  # 3 years of monthly auctions
-        else:
-            frequency_days = 90  # Quarterly
-            n_auctions = 24  # 6 years of quarterly auctions
+        Args:
+            bond_type: Bond type (e.g., '10Y')
+            
+        Returns:
+            List of auction data dictionaries
+        """
+        auctions = []
         
-        # Generate auction dates (backwards from today)
-        for i in range(n_auctions):
-            # Auction date
-            auction_date = end_date - timedelta(days=i * frequency_days)
-            auction_date_str = auction_date.strftime("%Y-%m-%d")
+        try:
+            # Convert bond type to parameters needed for Treasury API
+            security_type = TREASURY_TYPE_MAP.get(bond_type)
+            security_term = TREASURY_TERM_MAP.get(bond_type)
             
-            # Generate CUSIP
-            cusip = f"{cusip_prefixes.get(bond_type, '912810')}{chr(65 + (i % 26))}{i % 10}"
+            if not security_type or not security_term:
+                logger.warning(f"No Treasury API mapping for {bond_type}")
+                return []
             
-            # Base yield with some variation
-            base_yield = base_yields.get(bond_type, 4.0)
+            # Treasury Fiscal Data API - auction results endpoint
+            api_url = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/auction_data"
             
-            # Add time trend (yields were generally lower in the past)
-            time_factor = i / n_auctions  # 0 to 1
-            historical_adjustment = -1.5 * time_factor  # -1.5% change over the full period
+            # Build term parameter based on bond type
+            term_param = ""
             
-            # Add cyclical component
-            cyclical = 0.3 * np.sin(i * 0.5)
+            # Specific handling for each bond type
+            if bond_type == '20Y':
+                term_param = "20-YEAR"
+            elif bond_type == '30Y':
+                term_param = "30-YEAR"
+            elif bond_type == '10Y':
+                term_param = "10-YEAR"
+            elif bond_type == '7Y':
+                term_param = "7-YEAR"
+            elif bond_type == '5Y':
+                term_param = "5-YEAR"
+            elif bond_type == '2Y':
+                term_param = "2-YEAR"
+            elif bond_type == '1Y':
+                term_param = "52-WEEK"
+            elif bond_type == '6M':
+                term_param = "26-WEEK"
+            elif bond_type == '3M':
+                term_param = "13-WEEK"
+            elif bond_type == '1M':
+                term_param = "4-WEEK"
+                
+            # Parameters for the API request
+            params = {
+                "security_term": term_param,
+                "security_type": security_type.upper(),
+                "sort": "-auction_date",  # Sort by auction date descending
+                "format": "json",
+                "page[size]": "20"  # Get 20 results per page
+            }
             
-            # Add randomness
-            random_factor = np.random.normal(0, 0.1)
+            # Make request to API
+            response = requests.get(api_url, params=params)
+            response.raise_for_status()
+            data = response.json()
             
-            # Calculate yield
-            high_yield = base_yield + historical_adjustment + cyclical + random_factor
-            high_yield = max(0.1, high_yield)  # Ensure positive yield
+            # Process the results
+            api_auctions = data.get('data', [])
             
-            auctions.append({
-                'date': auction_date_str,
-                'cusip': cusip,
-                'high_yield': f"{high_yield:.3f}"
-            })
-        
-        # Sort by date (newest first, which is how TreasuryDirect typically presents data)
-        auctions.sort(key=lambda x: x['date'], reverse=True)
-        
-        return auctions
+            for auction in api_auctions:
+                try:
+                    # Get auction date
+                    auction_date = auction.get('auction_date')
+                    if not auction_date:
+                        continue
+                    
+                    # Get yield - format depends on bond type
+                    if security_type.lower() == 'bill':
+                        # For bills, use the discount rate
+                        high_yield = auction.get('high_discount_rate')
+                    else:
+                        # For notes and bonds, use the high yield
+                        high_yield = auction.get('high_yield')
+                    
+                    if not high_yield:
+                        continue
+                    
+                    # Create auction record
+                    auction_record = {
+                        'date': auction_date,
+                        'cusip': auction.get('cusip', ''),
+                        'high_yield': str(high_yield)
+                    }
+                    
+                    auctions.append(auction_record)
+                    
+                except Exception as e:
+                    logger.warning(f"Error processing API auction data: {str(e)}")
+                    continue
+            
+            return auctions
+            
+        except Exception as e:
+            logger.error(f"Error fetching data from Treasury Fiscal API: {str(e)}")
+            return []
 
     def get_fred_data(self, series_ids: List[str], start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """Fetch economic data from FRED."""
@@ -619,3 +816,169 @@ class DataFetcher:
         except Exception as e:
             logger.error(f"Error adding auction data to prediction: {e}")
             return prediction
+
+    def test_next_auction_date(self, bond_type: str) -> None:
+        """
+        Test function to check what auction dates the current implementation finds.
+        
+        Args:
+            bond_type: Bond type to test (e.g., '20Y')
+        """
+        logger.info(f"Testing auction date finder for {bond_type}")
+        
+        # Force update to get fresh data
+        next_date, auction_details = self.get_next_auction_date(bond_type, force_update=True)
+        
+        logger.info(f"Next auction date for {bond_type}: {next_date}")
+        
+        if auction_details:
+            logger.info("Auction details:")
+            for key, value in auction_details.items():
+                logger.info(f"  {key}: {value}")
+            
+            # Special attention to security type and term
+            logger.info(f"Security Type: {auction_details.get('security_type', 'N/A')}")
+            logger.info(f"Security Term: {auction_details.get('security_term', 'N/A')}")
+        else:
+            logger.info(f"No auction details available for {bond_type}")
+        
+        # Log debug info about all auctions
+        all_auctions = self.fetch_upcoming_treasury_auctions(force_update=True)
+        potential_matches = [a for a in all_auctions if '20' in a.get('security_term', '')]
+        
+        if bond_type == '20Y' and potential_matches:
+            logger.info(f"Found {len(potential_matches)} potential 20Y auctions in raw data:")
+            for i, auction in enumerate(potential_matches[:5], 1):  # Show first 5
+                logger.info(f"Potential {bond_type} auction {i}:")
+                logger.info(f"  Type: {auction.get('security_type')}")
+                logger.info(f"  Term: {auction.get('security_term')}")
+                logger.info(f"  Date: {auction.get('auction_date')}")
+                
+    def backtest_yield_predictions(self, bond_type: str, num_auctions: int = 10) -> Dict[str, Any]:
+        """
+        Perform back-testing of yield predictions against historical auction data.
+        
+        Args:
+            bond_type: Bond type (e.g., '10Y', '20Y')
+            num_auctions: Number of past auctions to test against (default: 10)
+            
+        Returns:
+            Dictionary with back-testing results including accuracy metrics
+        """
+        logger.info(f"Starting back-testing for {bond_type} with {num_auctions} historical auctions")
+        
+        try:
+            # Get historical auction data
+            historical_auctions = self.get_treasury_direct_auctions(bond_type, force_update=True)
+            
+            if not historical_auctions:
+                logger.warning(f"No historical auction data available for {bond_type}")
+                return {"success": False, "error": "No historical auction data available"}
+                
+            # Take only the specified number of most recent auctions
+            test_auctions = historical_auctions[:num_auctions]
+            logger.info(f"Found {len(test_auctions)} historical auctions for testing")
+            
+            results = []
+            
+            # For each historical auction, simulate making a prediction
+            for auction in test_auctions:
+                auction_date_str = auction.get('date')
+                actual_yield = float(auction.get('high_yield', 0))
+                
+                # Convert string to datetime
+                auction_date = datetime.strptime(auction_date_str, '%Y-%m-%d')
+                
+                # Simulate making prediction 7 days before auction
+                prediction_date = auction_date - timedelta(days=7)
+                prediction_date_str = prediction_date.strftime('%Y-%m-%d')
+                
+                # Get Treasury data up to the prediction date
+                # This simulates only having data available up to the prediction date
+                treasury_df = self.get_treasury_data(
+                    bond_type, 
+                    force_update=True,
+                    end_date=prediction_date_str
+                )
+                
+                if treasury_df.empty:
+                    logger.warning(f"No treasury data available for prediction date {prediction_date_str}")
+                    continue
+                
+                # Use the current yield on prediction date as a simple prediction
+                # In a real implementation, this would call the predictor module
+                latest_yield = treasury_df['value'].iloc[-1]
+                
+                # In a real implementation, we would use a more sophisticated prediction model
+                # For now, we use a simple model: current yield + small adjustment
+                # This is just a placeholder - the actual prediction would come from the predictor module
+                predicted_yield = latest_yield + 0.05  # Simple adjustment
+                
+                # Calculate error
+                error = predicted_yield - actual_yield
+                percent_error = (error / actual_yield) * 100 if actual_yield != 0 else float('inf')
+                
+                result = {
+                    'auction_date': auction_date_str,
+                    'prediction_date': prediction_date_str,
+                    'actual_yield': actual_yield,
+                    'predicted_yield': predicted_yield,
+                    'error': error,
+                    'percent_error': percent_error
+                }
+                
+                results.append(result)
+                logger.info(f"Auction {auction_date_str}: Predicted {predicted_yield:.3f}%, Actual {actual_yield:.3f}%, Error {error:.3f}%")
+            
+            # Calculate overall metrics
+            errors = [r['error'] for r in results]
+            percent_errors = [r['percent_error'] for r in results]
+            
+            metrics = {
+                'mean_absolute_error': sum(abs(e) for e in errors) / len(errors) if errors else 0,
+                'root_mean_squared_error': (sum(e**2 for e in errors) / len(errors))**0.5 if errors else 0,
+                'mean_absolute_percent_error': sum(abs(p) for p in percent_errors) / len(percent_errors) if percent_errors else 0,
+                'num_predictions': len(results),
+                'num_underestimates': sum(1 for e in errors if e < 0),
+                'num_overestimates': sum(1 for e in errors if e > 0)
+            }
+            
+            # Save results to cache
+            cache_file = os.path.join(self.cache_dir, f"backtest_{bond_type}.json")
+            backtest_data = {
+                'bond_type': bond_type,
+                'timestamp': datetime.now().isoformat(),
+                'metrics': metrics,
+                'predictions': results
+            }
+            
+            with open(cache_file, 'w') as f:
+                json.dump(backtest_data, f, indent=2)
+            
+            logger.info(f"Back-testing complete for {bond_type}")
+            logger.info(f"Mean absolute error: {metrics['mean_absolute_error']:.4f}%")
+            logger.info(f"Root mean squared error: {metrics['root_mean_squared_error']:.4f}%")
+            logger.info(f"Mean absolute percent error: {metrics['mean_absolute_percent_error']:.2f}%")
+            
+            return {
+                'success': True,
+                'bond_type': bond_type,
+                'metrics': metrics,
+                'predictions': results
+            }
+            
+        except Exception as e:
+            logger.error(f"Error during back-testing for {bond_type}: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+def run_auction_date_test():
+    """Simple helper function to test the next auction date functionality."""
+    fetcher = DataFetcher()
+    fetcher.test_next_auction_date('20Y')
+    
+if __name__ == "__main__":
+    # This allows running the test directly from this file
+    run_auction_date_test()
