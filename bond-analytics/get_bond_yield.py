@@ -60,7 +60,7 @@ SECURITY_TYPES = {
 
 DESCRIPTION = f"""
 Treasury Bond Yield Fetcher v{VERSION}
-Retrieves auction yields for Treasury bills, notes, bonds, TIPS, and FRNs.
+Retrieves real historical auction yields for Treasury bills, notes, bonds, TIPS, and FRNs.
 """
 
 EPILOG = """
