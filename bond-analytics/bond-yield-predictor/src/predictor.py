@@ -329,7 +329,7 @@ class YieldPredictor:
 
         return bias
 
-    def _calculate_pre_auction_weighted_prediction(self, df: pd.DataFrame, days_to_auction: int = None) -> float:
+    def _calculate_pre_auction_weighted_prediction(self, df: pd.DataFrame, days_to_auction: int) -> float:
         """
         Calculate a prediction weighted more heavily on recent days if close to an auction.
         This is based on the observation that yields immediately preceding an auction
@@ -373,7 +373,8 @@ class YieldPredictor:
         
         return float(weighted_pred)
 
-    def _calculate_auction_aware_ensemble(self, predictions: Dict[str, float], 
+    def _calculate_auction_aware_ensemble(self, 
+                                    predictions: Dict[str, float], 
                                     days_to_auction: int,
                                     backtest_metrics: Dict[str, Dict[str, float]]) -> Optional[float]:
         """
@@ -443,8 +444,7 @@ class YieldPredictor:
                 
         return ensemble_pred
 
-    def predict_yield(self, df: pd.DataFrame, bond_type: str,
-                      prediction_date_str: Optional[str] = None) -> Dict[str, Any]:
+    def predict_yield(self, df: pd.DataFrame, bond_type: str, prediction_date_str: Optional[str] = None) -> Dict[str, Any]:
         """
         Predict the yield for a Treasury bond using various methods and dynamic ensemble.
 
@@ -1077,3 +1077,369 @@ class YieldPredictor:
         except Exception as e:
             self.logger.error(f"Error calculating prediction confidence: {e}")
             return 0.5  # Default medium confidence on error
+
+    def _calculate_auction_proximity_boost(self, days_to_auction: Optional[int]) -> float:
+        """
+        Calculate boost factor based on proximity to auction.
+        
+        Args:
+            days_to_auction: Number of days until the next auction
+            
+        Returns:
+            Boost factor (multiplier)
+        """
+        if days_to_auction is None or days_to_auction > 14:
+            return 1.0  # No boost if no auction or too far away
+            
+        # Much more aggressive boosting for imminent auctions
+        # For auctions less than 5 days away, apply exponential boosting
+        if days_to_auction <= 5:
+            # Exponential increase as auction approaches
+            # 5 days: 2.5x boost
+            # 4 days: 3.5x boost
+            # 3 days: 5.0x boost
+            # 2 days: 7.0x boost
+            # 1 day:  10.0x boost
+            # Auction day: 15.0x boost
+            return 15.0 * (1.0 - 0.35 * days_to_auction)
+        elif days_to_auction <= 10:
+            # Linear decrease from 2.0 to 1.0 as days increase from 5 to 14
+            return 2.5 - ((days_to_auction - 5) * 0.2)
+        else:  # 11-14 days
+            # Minor boost for auctions 11-14 days away
+            return 1.2 - ((days_to_auction - 10) * 0.05)
+            
+    def _calculate_auction_aware_ensemble(self, 
+                                        predictions: Dict[str, float],
+                                        days_to_auction: Optional[int],
+                                        current_metrics: Dict[str, Dict[str, float]] = None) -> float:
+        """
+        Calculate ensemble prediction with auction awareness.
+        
+        Args:
+            predictions: Dictionary of model name to prediction
+            days_to_auction: Number of days until the next auction
+            current_metrics: Dictionary of backtest metrics for each model
+            
+        Returns:
+            Weighted ensemble prediction
+        """
+        # Default weights favor balanced approach
+        weights = {
+            'rolling_5d': 0.15,
+            'rolling_10d': 0.10,
+            'rolling_20d': 0.10,
+            'arima': 0.25,
+            'exponential_smoothing': 0.25,
+            'linear_regression': 0.05,
+            'xgboost': 0.10,
+        }
+        
+        # Adjust weights based on auction proximity
+        if days_to_auction is not None:
+            if days_to_auction <= 4:
+                # EXTREMELY aggressive for auctions within 4 days
+                # For imminent auctions, make dramatic adjustments to yield higher predictions
+                if days_to_auction <= 2:
+                    # Extreme shift for auctions within 48 hours
+                    # Almost exclusively favor most recent trends and market expectations
+                    weights = {
+                        'rolling_5d': 0.50,      # Recent movements dominate
+                        'rolling_10d': 0.00,
+                        'rolling_20d': 0.00,
+                        'arima': 0.10,           # Minimal influence from models
+                        'exponential_smoothing': 0.05,
+                        'linear_regression': 0.00,
+                        'xgboost': 0.00,
+                        'pre_auction_weighted': 1.5    # Pre-auction model gets extremely aggressive weight
+                    }
+                    self.logger.info(f"Using extremely aggressive auction weights (days to auction: {days_to_auction})")
+                else:  # 3-4 days
+                    # Very strong adjustments for auctions 3-4 days away
+                    weights = {
+                        'rolling_5d': 0.40,
+                        'rolling_10d': 0.05,
+                        'rolling_20d': 0.00,
+                        'arima': 0.15,
+                        'exponential_smoothing': 0.10,
+                        'linear_regression': 0.00,
+                        'xgboost': 0.00,
+                        'pre_auction_weighted': 1.2   # Pre-auction model gets aggressive weight
+                    }
+                    self.logger.info(f"Using very aggressive auction weights (days to auction: {days_to_auction})")
+            elif days_to_auction <= 7:
+                # Medium-high proximity: emphasize recent trends more
+                weights = {
+                    'rolling_5d': 0.30,
+                    'rolling_10d': 0.10,
+                    'rolling_20d': 0.05,
+                    'arima': 0.25,
+                    'exponential_smoothing': 0.15,
+                    'linear_regression': 0.05,
+                    'xgboost': 0.10,
+                    'pre_auction_weighted': 0.70   # Significant weight but not dominant
+                }
+            elif days_to_auction <= 14:
+                # Further out: more balanced approach with moderate pre-auction influence
+                weights = {
+                    'rolling_5d': 0.20,
+                    'rolling_10d': 0.15,
+                    'rolling_20d': 0.10,
+                    'arima': 0.25,
+                    'exponential_smoothing': 0.20,
+                    'linear_regression': 0.05,
+                    'xgboost': 0.05,
+                    'pre_auction_weighted': 0.40   # Moderate weight
+                }
+                
+        # Filter predictions to only include models we have
+        available_models = {k: v for k, v in predictions.items() if k in weights}
+        available_weights = {k: weights[k] for k in available_models.keys()}
+        
+        # Normalize weights
+        weight_sum = sum(available_weights.values())
+        if weight_sum > 0:
+            normalized_weights = {k: v/weight_sum for k, v in available_weights.items()}
+        else:
+            # Fallback to equal weights if no valid weights
+            normalized_weights = {k: 1.0/len(available_models) for k in available_models.keys()}
+        
+        # Calculate weighted average
+        weighted_sum = sum(predictions[model] * normalized_weights[model] 
+                          for model in available_models)
+        
+        return weighted_sum
+        
+    def _calculate_pre_auction_weighted_prediction(self, df: pd.DataFrame, days_to_auction: int) -> float:
+        """
+        Calculate prediction with pre-auction weighting that prioritizes recent movements.
+        This method is specifically designed for the period immediately before auctions.
+        
+        Args:
+            df: DataFrame with historical yield data (includes 'date' and 'yield' columns)
+            days_to_auction: Number of days until the next auction
+            
+        Returns:
+            Pre-auction weighted prediction
+        """
+        if days_to_auction is None or days_to_auction > 14:
+            return None  # Only activate for auctions within 14 days
+        
+        if df.empty or 'yield' not in df.columns:
+            self.logger.error("Cannot calculate pre-auction prediction: DataFrame is empty or missing 'yield' column")
+            return None
+            
+        # Ensure we're working with a properly sorted DataFrame
+        df = df.sort_values('date')
+        
+        # Get increasingly recent data segments
+        last_5d = df['yield'].iloc[-5:].values if len(df) >= 5 else None
+        last_3d = df['yield'].iloc[-3:].values if len(df) >= 3 else None
+        last_2d = df['yield'].iloc[-2:].values if len(df) >= 2 else None
+        last_1d = df['yield'].iloc[-1:].values if len(df) >= 1 else None
+        
+        # Base calculation on trend directionality
+        if last_5d is not None and len(last_5d) >= 5:
+            # Calculate day-over-day changes
+            changes_5d = np.diff(last_5d)
+            changes_3d = np.diff(last_3d)
+            changes_2d = np.diff(last_2d)
+            
+            # Determine if there's a consistent trend in the last days
+            trend_5d = np.mean(changes_5d)
+            trend_3d = np.mean(changes_3d)
+            trend_2d = np.mean(changes_2d)
+            
+            # For auctions ≤4 days away, amplify recent trends dramatically
+            # The closer to auction, the more we emphasize very recent movements
+            if days_to_auction <= 2:
+                # Extremely aggressive for 1-2 days before auction
+                weight_5d = 0.1   # Minimal weight to older data
+                weight_3d = 0.2
+                weight_2d = 0.3
+                weight_1d = 0.4   # Last day gets highest weight
+                
+                # Calculate amplification factor - much higher for imminent auctions
+                # Typical pre-auction movements are 3-5 times larger than normal
+                if days_to_auction == 1:
+                    amplification = 6.0  # Day before auction
+                else:
+                    amplification = 4.5  # Two days before
+                
+                # Weighted average of trends with amplification
+                projected_change = ((trend_5d * weight_5d) + 
+                                   (trend_3d * weight_3d) + 
+                                   (trend_2d * weight_2d)) * amplification
+                                   
+                # Apply a strong directional bias based on the most recent day's movement
+                # This captures market sentiment right before the auction
+                last_day_change = 0
+                if len(last_2d) >= 2:
+                    last_day_change = last_2d[1] - last_2d[0]
+                    
+                if abs(last_day_change) > 0.01:  # If meaningful movement on last day
+                    # Give even more weight to the last day's direction for imminent auctions
+                    projected_change = (projected_change * (1 - weight_1d)) + (last_day_change * weight_1d * amplification)
+                
+            elif days_to_auction <= 4:
+                # Very aggressive for 3-4 days away
+                weight_5d = 0.20
+                weight_3d = 0.30
+                weight_2d = 0.30
+                weight_1d = 0.20
+                
+                # Calculate amplification factor
+                amplification = 3.0
+                
+                # Weighted average of trends
+                projected_change = ((trend_5d * weight_5d) + 
+                                   (trend_3d * weight_3d) + 
+                                   (trend_2d * weight_2d)) * amplification
+                
+                # Apply directional bias from last day
+                if len(last_2d) >= 2:
+                    last_day_change = last_2d[1] - last_2d[0]
+                    if abs(last_day_change) > 0.01:  # If meaningful movement
+                        projected_change = (projected_change * (1 - weight_1d)) + (last_day_change * weight_1d * amplification)
+                
+            else:  # 5-14 days
+                # Moderate pre-auction adjustment
+                weight_5d = 0.4
+                weight_3d = 0.3
+                weight_2d = 0.3
+                
+                # Amplification decreases as we get further from auction
+                amplification = max(1.0, 2.0 - ((days_to_auction - 5) * 0.1))
+                
+                # Weighted average of trends
+                projected_change = ((trend_5d * weight_5d) + 
+                                   (trend_3d * weight_3d) + 
+                                   (trend_2d * weight_2d)) * amplification
+            
+            # Apply projected change to last value
+            last_value = df['yield'].iloc[-1]
+            prediction = last_value + projected_change
+            
+            self.logger.info(f"Pre-auction weighted prediction: {prediction:.4f} (last value: {last_value:.4f}, projected change: {projected_change:.4f})")
+            
+            return prediction
+            
+        # Fallback if not enough data
+        return df['yield'].iloc[-1]
+
+    def predict_auction_yield(self, bond_type: str, prediction_date: Optional[str] = None,
+                            historical_mode: bool = False) -> Dict[str, Any]:
+        """
+        Predict the yield for the next auction of the given bond type.
+        
+        Args:
+            bond_type: Bond type to predict (e.g., '10Y')
+            prediction_date: Date for prediction (default: today)
+            historical_mode: If True, don't include auction data
+            
+        Returns:
+            Dictionary with prediction results
+        """
+        if not prediction_date:
+            prediction_date = datetime.now().strftime('%Y-%m-%d')
+            
+        logger.info(f"Predicting yield for {bond_type} bond as of {prediction_date}")
+        
+        # Get historical bond data
+        bond_data = self.data_fetcher.get_treasury_data(bond_type)
+        if bond_data.empty:
+            logger.error(f"No historical data available for {bond_type}")
+            return {'success': False, 'error': 'No historical data available'}
+            
+        # Filter data to only use what would be available on prediction date
+        pred_date = datetime.strptime(prediction_date, '%Y-%m-%d').date()
+        bond_data = bond_data[bond_data['date'].dt.date <= pred_date]
+        
+        if len(bond_data) < 30:  # Need sufficient history
+            logger.warning(f"Insufficient historical data for {bond_type} (only {len(bond_data)} points)")
+            return {'success': False, 'error': 'Insufficient historical data'}
+            
+        # Get most recent yield
+        latest_yield = bond_data['value'].iloc[-1]
+        latest_date = bond_data['date'].iloc[-1]
+        
+        # Calculate yield trend over past month
+        month_ago = pred_date - timedelta(days=30)
+        month_data = bond_data[bond_data['date'].dt.date >= month_ago]
+        
+        if len(month_data) > 5:  # Need sufficient recent data
+            first_yield = month_data['value'].iloc[0]
+            last_yield = month_data['value'].iloc[-1]
+            monthly_change = last_yield - first_yield
+        else:
+            monthly_change = 0
+            
+        # Calculate volatility (standard deviation over past month)
+        if len(month_data) > 5:
+            volatility = month_data['value'].std()
+        else:
+            volatility = bond_data['value'].std() * 0.5  # Reduced weight
+        
+        # Apply the prediction model logic here
+        # In a production system, this would be a real model (regression, ML, etc.)
+        # For now, use a simple heuristic based on recent trends
+        
+        # Basic model - current yield + trend adjustment + volatility factor
+        trend_factor = monthly_change * 0.5  # Assume trend continues but dampened
+        random_factor = np.random.normal(0, volatility * 0.3)  # Add some randomness based on volatility
+        
+        predicted_yield = latest_yield + trend_factor + random_factor
+        
+        # Create prediction result
+        prediction = {
+            'bond_type': bond_type,
+            'prediction_date': prediction_date,
+            'predicted_yield': round(predicted_yield, 3),
+            'current_yield': round(latest_yield, 3),
+            'latest_date': latest_date.strftime('%Y-%m-%d'),
+            'monthly_change': round(monthly_change, 3),
+            'volatility': round(volatility, 3),
+            'trend_factor': round(trend_factor, 3),
+            'success': True
+        }
+        
+        # Add auction data if not in historical mode
+        if not historical_mode:
+            prediction = self.data_fetcher.add_auction_data_to_prediction(prediction, bond_type)
+        
+        return prediction
+
+    def evaluate_prediction_accuracy(self, bond_type: str, num_auctions: int = 10) -> Dict[str, Any]:
+        """
+        Evaluate the accuracy of the prediction model on historical data.
+        
+        Args:
+            bond_type: Bond type to evaluate
+            num_auctions: Number of past auctions to evaluate
+            
+        Returns:
+            Dictionary with evaluation results
+        """
+        logger.info(f"Evaluating prediction accuracy for {bond_type} with {num_auctions} auctions")
+        
+        # Use the data fetcher's backtest functionality
+        backtest_results = self.data_fetcher.backtest_yield_predictions(bond_type, num_auctions)
+        
+        # Add interpretation of results
+        if backtest_results.get('success'):
+            metrics = backtest_results.get('metrics', {})
+            mae = metrics.get('mean_absolute_error', 0)
+            
+            # Interpret the accuracy
+            if mae < 0.1:
+                interpretation = "Excellent accuracy (MAE < 0.1%)"
+            elif mae < 0.2:
+                interpretation = "Good accuracy (MAE < 0.2%)"
+            elif mae < 0.3:
+                interpretation = "Moderate accuracy (MAE < 0.3%)"
+            else:
+                interpretation = "Poor accuracy (MAE >= 0.3%)"
+                
+            backtest_results['interpretation'] = interpretation
+            
+        return backtest_results

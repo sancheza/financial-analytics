@@ -472,3 +472,235 @@ AttributeError: type object 'datetime.datetime' has no attribute 'datetime'
 2025-04-12 17:32:35,117 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
 2025-04-12 17:32:35,117 - src.predictor - INFO - No significant adaptive bias detected or applied.
 2025-04-12 17:32:35,774 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 18:01:06,870 - __main__ - INFO - Processing 20Y bond
+2025-04-12 18:01:06,871 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 18:01:06,873 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 18:01:06,873 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 18:01:06,886 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 18:01:06,886 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 18:01:06,887 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-12 18:01:06,887 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 18:01:06,887 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 18:01:06,887 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 18:01:06,887 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 18:01:06,887 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 18:01:06,887 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 18:01:06,888 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 18:01:07,225 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 18:01:07,338 - src.predictor - INFO - Applied auction proximity boost: 2.0x to pre-auction weighted prediction (days to auction: 5)
+2025-04-12 18:01:07,339 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 18:01:07,339 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 18:01:08,005 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 18:08:34,017 - __main__ - INFO - Processing 20Y bond
+2025-04-12 18:08:34,021 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 18:08:34,035 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 18:08:34,035 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 18:08:34,093 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 18:08:34,093 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 18:08:34,096 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-12 18:08:34,096 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 18:08:34,096 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 18:08:34,096 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 18:08:34,096 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 18:08:34,096 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 18:08:34,096 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 18:08:34,098 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 18:08:34,699 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 18:08:35,031 - __main__ - ERROR - Error processing 20Y: unsupported operand type(s) for -: 'float' and 'Timestamp'
+2025-04-12 18:08:35,045 - __main__ - ERROR - Traceback (most recent call last):
+  File "/Users/asanchez/dev/financial-analytics/bond-analytics/bond-yield-predictor/src/main.py", line 240, in predict_bond_yields
+    prediction = predictor.predict_yield(df, bond_type, prediction_date)
+  File "/Users/asanchez/dev/financial-analytics/bond-analytics/bond-yield-predictor/src/predictor.py", line 596, in predict_yield
+    pre_auction_pred = self._calculate_pre_auction_weighted_prediction(df, days_to_auction)
+  File "/Users/asanchez/dev/financial-analytics/bond-analytics/bond-yield-predictor/src/predictor.py", line 1244, in _calculate_pre_auction_weighted_prediction
+    changes_5d = np.diff(last_5d)
+  File "/opt/homebrew/lib/python3.13/site-packages/numpy/lib/_function_base_impl.py", line 1496, in diff
+    a = op(a[slice1], a[slice2])
+TypeError: unsupported operand type(s) for -: 'float' and 'Timestamp'
+
+2025-04-12 18:10:31,669 - __main__ - INFO - Processing 20Y bond
+2025-04-12 18:10:31,669 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 18:10:31,675 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 18:10:31,675 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 18:10:31,698 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 18:10:31,698 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 18:10:31,699 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-12 18:10:31,699 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 18:10:31,699 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 18:10:31,699 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 18:10:31,699 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 18:10:31,699 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 18:10:31,699 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 18:10:31,700 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 18:10:32,025 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 18:10:32,168 - src.predictor - INFO - Pre-auction weighted prediction: 5.1060 (last value: 4.9000, projected change: 0.2060)
+2025-04-12 18:10:32,170 - __main__ - ERROR - Error processing 20Y: YieldPredictor._calculate_auction_aware_ensemble() takes 3 positional arguments but 4 were given
+2025-04-12 18:10:32,175 - __main__ - ERROR - Traceback (most recent call last):
+  File "/Users/asanchez/dev/financial-analytics/bond-analytics/bond-yield-predictor/src/main.py", line 240, in predict_bond_yields
+    prediction = predictor.predict_yield(df, bond_type, prediction_date)
+  File "/Users/asanchez/dev/financial-analytics/bond-analytics/bond-yield-predictor/src/predictor.py", line 622, in predict_yield
+    ensemble_prediction = self._calculate_auction_aware_ensemble(
+        valid_preds_for_ensemble,
+        days_to_auction,
+        current_metrics
+    )
+TypeError: YieldPredictor._calculate_auction_aware_ensemble() takes 3 positional arguments but 4 were given
+
+2025-04-12 18:13:34,373 - __main__ - INFO - Processing 20Y bond
+2025-04-12 18:13:34,373 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 18:13:34,375 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 18:13:34,376 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 18:13:34,383 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 18:13:34,383 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 18:13:34,384 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-12 18:13:34,384 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 18:13:34,384 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 18:13:34,384 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 18:13:34,384 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 18:13:34,384 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 18:13:34,384 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 18:13:34,384 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 18:13:34,757 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 18:13:35,187 - src.predictor - INFO - Pre-auction weighted prediction: 5.1060 (last value: 4.9000, projected change: 0.2060)
+2025-04-12 18:13:35,195 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 18:13:35,205 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 18:13:35,910 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 18:30:34,961 - __main__ - INFO - Processing 20Y bond
+2025-04-12 18:30:34,961 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-12 18:30:34,964 - src.data_fetcher - INFO - Using cached auction data for 20Y
+2025-04-12 18:30:34,964 - __main__ - INFO - Found 24 20Y auctions
+2025-04-12 18:30:34,981 - src.predictor - INFO - Predicting 20Y yield for 2025-04-11
+2025-04-12 18:30:34,982 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 18:30:34,983 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-12 18:30:34,985 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 18:30:34,985 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 18:30:34,985 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 18:30:34,985 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 18:30:34,985 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 18:30:34,985 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 18:30:34,986 - src.predictor - INFO - Loaded backtest metrics from ../data/json/metrics_20Y.json
+2025-04-12 18:30:35,334 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-12 18:30:35,442 - src.predictor - INFO - Pre-auction weighted prediction: 5.1060 (last value: 4.9000, projected change: 0.2060)
+2025-04-12 18:30:35,443 - src.predictor - WARNING - No results found in ../data/json/auction_backtest_20Y.json.
+2025-04-12 18:30:35,443 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-12 18:30:35,985 - src.predictor - ERROR - Error creating visualization: Failed to convert value(s) to axis units: Timestamp('2025-04-11 00:00:00')
+2025-04-12 19:03:27,622 - src.data_fetcher - INFO - Testing auction date finder for 20Y
+2025-04-12 19:03:27,622 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-12 19:03:27,622 - src.data_fetcher - INFO - Fetching fresh upcoming auction data from Treasury API
+2025-04-12 19:03:28,021 - src.data_fetcher - INFO - Saved upcoming auction data to cache with 100 entries
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Next auction date for 20Y: 2025-04-16
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Auction details:
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   record_date: 2025-04-04
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   security_type: Bond
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   security_term: 19-Year 10-Month
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   reopening: Yes
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   cusip: 912810UJ5
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   offering_amt: 13000000000
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   announcemt_date: 2025-04-10
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   auction_date: 2025-04-16
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO -   issue_date: 2025-04-30
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Security Type: Bond
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Security Term: 19-Year 10-Month
+2025-04-12 19:03:28,022 - src.data_fetcher - INFO - Fetching fresh upcoming auction data from Treasury API
+2025-04-12 19:03:28,374 - src.data_fetcher - INFO - Saved upcoming auction data to cache with 100 entries
+2025-04-12 19:03:28,374 - src.data_fetcher - INFO - Found 1 potential 20Y auctions in raw data:
+2025-04-12 19:03:28,374 - src.data_fetcher - INFO - Potential 20Y auction 1:
+2025-04-12 19:03:28,374 - src.data_fetcher - INFO -   Type: Bond
+2025-04-12 19:03:28,374 - src.data_fetcher - INFO -   Term: 20-Year
+2025-04-12 19:03:28,374 - src.data_fetcher - INFO -   Date: 2024-11-20
+2025-04-12 19:06:38,599 - src.backtest_predictions - INFO - Back-testing 20Y bond yield predictions...
+2025-04-12 19:06:38,599 - src.data_fetcher - INFO - Starting back-testing for 20Y with 10 historical auctions
+2025-04-12 19:06:38,599 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 19:06:38,600 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 19:06:38,600 - src.data_fetcher - INFO - Found 10 historical auctions for testing
+2025-04-12 19:06:38,601 - src.data_fetcher - ERROR - Error during back-testing for 20Y: DataFetcher.get_treasury_data() got an unexpected keyword argument 'end_date'
+2025-04-12 19:06:38,601 - src.backtest_predictions - ERROR - Back-testing failed for 20Y: DataFetcher.get_treasury_data() got an unexpected keyword argument 'end_date'
+2025-04-12 19:06:38,601 - src.backtest_predictions - INFO - Back-testing complete: 0 of 1 tests successful
+2025-04-12 19:07:53,106 - src.backtest_predictions - INFO - Back-testing 20Y bond yield predictions...
+2025-04-12 19:07:53,107 - src.data_fetcher - INFO - Starting back-testing for 20Y with 10 historical auctions
+2025-04-12 19:07:53,107 - src.data_fetcher - INFO - Fetching TreasuryDirect auction data for 20Y
+2025-04-12 19:07:53,109 - src.data_fetcher - INFO - Saved 20Y auction data to cache
+2025-04-12 19:07:53,109 - src.data_fetcher - INFO - Found 10 historical auctions for testing
+2025-04-12 19:07:53,109 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:53,321 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-12 19:07:53,321 - src.data_fetcher - INFO - Auction 2025-04-12: Predicted 4.490%, Actual 4.379%, Error 0.111%
+2025-04-12 19:07:53,321 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:53,504 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-12 19:07:53,505 - src.data_fetcher - INFO - Auction 2025-01-12: Predicted 4.930%, Actual 4.437%, Error 0.493%
+2025-04-12 19:07:53,505 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:53,598 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-12 19:07:53,598 - src.data_fetcher - INFO - Auction 2024-10-14: Predicted 4.420%, Actual 4.539%, Error -0.119%
+2025-04-12 19:07:53,598 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:53,701 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-12 19:07:53,701 - src.data_fetcher - INFO - Auction 2024-07-16: Predicted 4.640%, Actual 4.432%, Error 0.208%
+2025-04-12 19:07:53,701 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:53,800 - src.data_fetcher - ERROR - Error fetching data from FRED: 400 Client Error: Bad Request for url: https://api.stlouisfed.org/fred/series/observations?series_id=DGS20&api_key=3bf6d800da3c51434c61ed5b9209c9cb&file_type=json&observation_start=2024-04-12&observation_end=2024-04-10
+2025-04-12 19:07:53,803 - src.data_fetcher - WARNING - No treasury data available for prediction date 2024-04-10
+2025-04-12 19:07:53,804 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:54,042 - src.data_fetcher - ERROR - Error fetching data from FRED: 400 Client Error: Bad Request for url: https://api.stlouisfed.org/fred/series/observations?series_id=DGS20&api_key=3bf6d800da3c51434c61ed5b9209c9cb&file_type=json&observation_start=2024-04-12&observation_end=2024-01-11
+2025-04-12 19:07:54,044 - src.data_fetcher - WARNING - No treasury data available for prediction date 2024-01-11
+2025-04-12 19:07:54,044 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:54,169 - src.data_fetcher - ERROR - Error fetching data from FRED: 400 Client Error: Bad Request for url: https://api.stlouisfed.org/fred/series/observations?series_id=DGS20&api_key=3bf6d800da3c51434c61ed5b9209c9cb&file_type=json&observation_start=2024-04-12&observation_end=2023-10-13
+2025-04-12 19:07:54,170 - src.data_fetcher - WARNING - No treasury data available for prediction date 2023-10-13
+2025-04-12 19:07:54,170 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:54,372 - src.data_fetcher - ERROR - Error fetching data from FRED: 400 Client Error: Bad Request for url: https://api.stlouisfed.org/fred/series/observations?series_id=DGS20&api_key=3bf6d800da3c51434c61ed5b9209c9cb&file_type=json&observation_start=2024-04-12&observation_end=2023-07-15
+2025-04-12 19:07:54,373 - src.data_fetcher - WARNING - No treasury data available for prediction date 2023-07-15
+2025-04-12 19:07:54,373 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:54,463 - src.data_fetcher - ERROR - Error fetching data from FRED: 400 Client Error: Bad Request for url: https://api.stlouisfed.org/fred/series/observations?series_id=DGS20&api_key=3bf6d800da3c51434c61ed5b9209c9cb&file_type=json&observation_start=2024-04-12&observation_end=2023-04-16
+2025-04-12 19:07:54,464 - src.data_fetcher - WARNING - No treasury data available for prediction date 2023-04-16
+2025-04-12 19:07:54,465 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-12 19:07:54,727 - src.data_fetcher - ERROR - Error fetching data from FRED: 400 Client Error: Bad Request for url: https://api.stlouisfed.org/fred/series/observations?series_id=DGS20&api_key=3bf6d800da3c51434c61ed5b9209c9cb&file_type=json&observation_start=2024-04-12&observation_end=2023-01-16
+2025-04-12 19:07:54,729 - src.data_fetcher - WARNING - No treasury data available for prediction date 2023-01-16
+2025-04-12 19:07:54,731 - src.data_fetcher - INFO - Back-testing complete for 20Y
+2025-04-12 19:07:54,731 - src.data_fetcher - INFO - Mean absolute error: 0.2327%
+2025-04-12 19:07:54,731 - src.data_fetcher - INFO - Root mean squared error: 0.2796%
+2025-04-12 19:07:54,731 - src.data_fetcher - INFO - Mean absolute percent error: 5.24%
+2025-04-12 19:07:54,731 - src.backtest_predictions - INFO - Results for 20Y:
+2025-04-12 19:07:54,731 - src.backtest_predictions - INFO -   Mean Absolute Error: 0.2327%
+2025-04-12 19:07:54,732 - src.backtest_predictions - INFO -   Root Mean Squared Error: 0.2796%
+2025-04-12 19:07:54,732 - src.backtest_predictions - INFO -   Mean Absolute Percent Error: 5.24%
+2025-04-12 19:07:54,732 - src.backtest_predictions - INFO -   Under/Over Estimates: 1/3
+2025-04-12 19:07:54,732 - src.backtest_predictions - INFO - Back-testing complete: 1 of 1 tests successful
+2025-04-12 19:07:54,732 - src.backtest_predictions - INFO - Average metrics across all bond types:
+2025-04-12 19:07:54,732 - src.backtest_predictions - INFO -   Average Mean Absolute Error: 0.2327%
+2025-04-12 19:07:54,732 - src.backtest_predictions - INFO -   Average Root Mean Squared Error: 0.2796%
+2025-04-12 19:07:54,732 - src.backtest_predictions - INFO -   Average Mean Absolute Percent Error: 5.24%
+2025-04-13 10:18:56,356 - src.backtest_predictions - INFO - Back-testing 20Y bond yield predictions...
+2025-04-13 10:18:56,357 - src.backtest_predictions - INFO - Fetching real historical yield data for 20Y from FRED...
+2025-04-13 10:18:58,982 - src.backtest_predictions - INFO - Retrieved 1304 days of yield data from FRED
+2025-04-13 10:18:59,016 - src.backtest_predictions - INFO - Extracted 61 monthly data points
+2025-04-13 10:18:59,027 - src.backtest_predictions - INFO - Successfully prepared 10 real yield records for back-testing
+2025-04-13 10:18:59,028 - src.backtest_predictions - INFO - Testing against 10 historical auction results
+2025-04-13 10:18:59,029 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,033 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-04-23
+2025-04-13 10:18:59,035 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,039 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-05-22
+2025-04-13 10:18:59,040 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,044 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-06-23
+2025-04-13 10:18:59,044 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,049 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-07-24
+2025-04-13 10:18:59,051 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,053 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-08-24
+2025-04-13 10:18:59,060 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,064 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-09-23
+2025-04-13 10:18:59,065 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,067 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-10-23
+2025-04-13 10:18:59,068 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,071 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-11-23
+2025-04-13 10:18:59,072 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,085 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2020-12-24
+2025-04-13 10:18:59,086 - src.data_fetcher - INFO - Using cached data for 20Y
+2025-04-13 10:18:59,101 - src.backtest_predictions - WARNING - No treasury data available for prediction date 2021-01-22
+2025-04-13 10:18:59,104 - src.backtest_predictions - INFO - Saved back-testing results to ../data/json/backtest_20Y.json
+2025-04-13 10:18:59,105 - src.backtest_predictions - ERROR - No valid prediction results for 20Y
+2025-04-13 10:18:59,105 - src.backtest_predictions - INFO - Back-testing complete: 1 of 1 tests successful
+2025-04-13 10:18:59,105 - src.backtest_predictions - INFO - Average metrics across all bond types:
+2025-04-13 10:18:59,106 - src.backtest_predictions - INFO -   Average Mean Absolute Error: 0.0000%
+2025-04-13 10:18:59,117 - src.backtest_predictions - INFO -   Average Root Mean Squared Error: 0.0000%
+2025-04-13 10:18:59,117 - src.backtest_predictions - INFO -   Average Mean Absolute Percent Error: 0.00%
