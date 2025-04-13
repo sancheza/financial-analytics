@@ -543,7 +543,7 @@ def get_earnings_growth(ticker: str, edgar_client: Optional[EdgarClient] = None,
         logger.debug(f"Error calculating earnings growth: {e}")
         return None
 
-def check_positive_earnings_streak(sec_data, years=8):
+def check_positive_earnings_streak(sec_data, years=SETTINGS['POSITIVE_EARNINGS_YEARS']):
     """Check if earnings have been positive for the specified number of years"""
     try:
         if 'historicalEPS' in sec_data and len(sec_data['historicalEPS']) >= years:
@@ -553,7 +553,7 @@ def check_positive_earnings_streak(sec_data, years=8):
         logger.debug(f"Error checking earnings streak: {e}")
         return False
 
-def check_dividend_history(stock, years=20):
+def check_dividend_history(stock, years=SETTINGS['DIVIDEND_HISTORY_YEARS']):
     """Check if dividends have been paid uninterrupted for specified years AND are currently active"""
     try:
         dividends = stock.dividends

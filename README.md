@@ -2,6 +2,48 @@
 
 This repo contains python scripts and libre office functions for performing financial analytics.
 
+## API Keys and Environment Variables
+
+This project uses API keys from various financial data providers. For security, all API keys should be stored in environment variables instead of in the code.
+
+### Setting up environment variables
+
+#### Using a .env file (recommended)
+
+1. Create a file named `.env` in the project root directory
+2. Add your API keys to this file in the format:
+   ```
+   ALPHA_VANTAGE_KEY=your_api_key_here
+   # Add other API keys as needed
+   ```
+3. Make sure `.env` is listed in your `.gitignore` file so it won't be committed to the repository
+4. Install the dotenv package with `pip install python-dotenv`
+5. Add this code at the beginning of any script that needs to use these variables:
+   ```python
+   from dotenv import load_dotenv
+   load_dotenv()  # Load variables from .env file
+   ```
+
+#### Using system environment variables
+
+You can also set environment variables directly in your shell:
+
+```bash
+# For Unix/Linux/macOS
+export ALPHA_VANTAGE_KEY=your_api_key_here
+
+# For Windows (Command Prompt)
+set ALPHA_VANTAGE_KEY=your_api_key_here
+
+# For Windows (PowerShell)
+$env:ALPHA_VANTAGE_KEY="your_api_key_here"
+```
+
+### Required API Keys
+
+- **Alpha Vantage**: Required for `value_screener.py` and `test_alpha_vantage.py`. Get a free key at [Alpha Vantage](https://www.alphavantage.co/support/#api-key).
+- **Financial Modeling Prep (FMP)**: Required for `getBookValueFMP`. Get a free key at [FMP](https://financialmodelingprep.com).
+
 ### getBookValue
 
 This is a Google Sheets function that populates book value in a worksheet for a set of tickers.

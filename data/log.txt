@@ -1,0 +1,72 @@
+2025-04-13 10:23:41,156 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-13 10:23:41,157 - src.data_fetcher - INFO - Fetching fresh upcoming auction data from Treasury API
+2025-04-13 10:23:41,968 - src.data_fetcher - INFO - Saved upcoming auction data to cache with 100 entries
+2025-04-13 10:23:42,550 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-13 10:23:42,550 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-13 10:23:42,550 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-13 10:23:42,551 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-13 10:23:42,562 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-13 10:23:42,562 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-13 12:08:32,717 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-13 12:08:32,718 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-13 12:08:32,718 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-13 12:08:32,718 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-13 12:08:32,718 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-13 12:08:32,718 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-13 12:08:32,719 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-13 12:08:32,719 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-13 12:27:19,978 - src.data_fetcher - INFO - Fetching fresh data for 20Y
+2025-04-13 12:27:20,201 - src.data_fetcher - INFO - Saved 20Y data to cache
+2025-04-13 12:27:20,207 - src.predictor - INFO - Predicting 20Y yield for 2025-04-05
+2025-04-13 12:27:20,207 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-13 12:27:20,209 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-13 12:27:20,209 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-13 12:27:20,209 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-13 12:27:20,209 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-13 12:27:20,209 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-13 12:27:20,209 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-13 12:27:20,209 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-13 12:27:20,210 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_20Y.json. Dynamic ensemble will use fallback weights.
+2025-04-13 12:27:20,792 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-13 12:27:21,105 - src.predictor - INFO - Pre-auction weighted prediction: 4.3560 (last value: 4.4400, projected change: -0.0840)
+2025-04-13 12:27:21,109 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_20Y.json. Cannot calculate adaptive bias.
+2025-04-13 12:27:21,109 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-13 12:27:21,116 - src.predictor - INFO - Predicting 20Y yield for 2025-01-05
+2025-04-13 12:27:21,117 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-13 12:27:21,117 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-13 12:27:21,117 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-13 12:27:21,117 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-13 12:27:21,117 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-13 12:27:21,117 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-13 12:27:21,117 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-13 12:27:21,117 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-13 12:27:21,118 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_20Y.json. Dynamic ensemble will use fallback weights.
+2025-04-13 12:27:21,456 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-13 12:27:21,555 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_20Y.json. Cannot calculate adaptive bias.
+2025-04-13 12:27:21,555 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-13 12:27:21,558 - src.predictor - INFO - Predicting 20Y yield for 2024-10-07
+2025-04-13 12:27:21,558 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-13 12:27:21,558 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-13 12:27:21,558 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-13 12:27:21,558 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-13 12:27:21,558 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-13 12:27:21,558 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-13 12:27:21,558 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-13 12:27:21,558 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-13 12:27:21,558 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_20Y.json. Dynamic ensemble will use fallback weights.
+2025-04-13 12:27:21,805 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-13 12:27:21,909 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_20Y.json. Cannot calculate adaptive bias.
+2025-04-13 12:27:21,909 - src.predictor - INFO - No significant adaptive bias detected or applied.
+2025-04-13 12:27:21,912 - src.predictor - INFO - Predicting 20Y yield for 2024-07-09
+2025-04-13 12:27:21,912 - src.data_fetcher - INFO - Looking for 20Y auctions (security type: Bond, term: 20-Year)
+2025-04-13 12:27:21,912 - src.data_fetcher - INFO - Using cached upcoming auction data
+2025-04-13 12:27:21,912 - src.data_fetcher - INFO - Retrieved 100 total upcoming auctions
+2025-04-13 12:27:21,912 - src.data_fetcher - INFO - Found 4 potential 20Y bond auctions
+2025-04-13 12:27:21,912 - src.data_fetcher - INFO - Found 4 20Y auctions matching criteria
+2025-04-13 12:27:21,912 - src.data_fetcher - INFO - Sample matching term: 19-Year 11-Month
+2025-04-13 12:27:21,913 - src.data_fetcher - INFO - Next 20Y auction date: 2025-04-16
+2025-04-13 12:27:21,913 - src.data_fetcher - INFO - This is a reopening of existing 20Y bond
+2025-04-13 12:27:21,913 - src.predictor - WARNING - Metrics file not found: ../data/json/metrics_20Y.json. Dynamic ensemble will use fallback weights.
+2025-04-13 12:27:22,095 - src.predictor - WARNING - Linear Regression: No FRED features available.
+2025-04-13 12:27:22,177 - src.predictor - WARNING - Auction backtest file not found: ../data/json/auction_backtest_20Y.json. Cannot calculate adaptive bias.
+2025-04-13 12:27:22,177 - src.predictor - INFO - No significant adaptive bias detected or applied.
