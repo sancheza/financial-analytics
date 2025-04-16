@@ -40,14 +40,15 @@ def print_version():
 
 def calculate_returns(coupon_rate: float, maturity: datetime.date, price: float, face_value: float = 100):
     """
-    Calculates simplified total/annual return assuming coupons are held (0% reinvestment).
-    Note: This calculation uses simple year fractions and doesn't match bond math precisely.
-    Returns: Tuple[float, float, float, float, int] -> fv_total, total_return_pct, annual_return_pct, years, num_future_coupons
+    Calculates simplified total return and a simple average annual return,
+    assuming coupons are held (0% reinvestment).
+    Note: Annual return is simple average, not compounded (CAGR).
+    Returns: Tuple[float, float, float, float, int] -> fv_total, total_return_pct, simple_annual_return_pct, years, num_future_coupons
     """
     today = datetime.date.today()
-    # Assuming weekends/holidays are handled by simply adding days.
     settlement_date = today + datetime.timedelta(days=SETTLEMENT_LAG_DAYS)
-    years = (maturity - today).days / 365.25 # Simple approximation for annualization
+    # Use settlement date for more accurate year calculation for return period
+    years = (maturity - settlement_date).days / 365.25 # Years from settlement to maturity
 
     # Calculate total value of coupons received from settlement until maturity
     coupon_amt_semi_annual = (coupon_rate / 100.0 * face_value) / 2.0
@@ -58,16 +59,26 @@ def calculate_returns(coupon_rate: float, maturity: datetime.date, price: float,
 
     fv_total = face_value + total_coupons_value  # Final value = Principal + Sum of coupons received
 
-    total_return_pct = ((fv_total / price) - 1) * 100
-    # Handle case where years might be very small or zero to avoid errors
-    if years > 1e-6: # Avoid division by zero or large exponents for near-zero years
-        annual_return_pct = ((fv_total / price) ** (1 / years) - 1) * 100
+    # Calculate total gain relative to the purchase price
+    total_gain = fv_total - price
+    if price <= 1e-9: # Avoid division by zero if price is zero or negative (already validated, but safe)
+        total_return_pct = 0.0
+        simple_annual_return_pct = 0.0
     else:
-        annual_return_pct = 0.0 # Or handle as appropriate (e.g., return total_return_pct)
+        total_return_pct = (total_gain / price) * 100
+
+        # Calculate Simple Average Annual Return
+        if years > 1e-6: # Avoid division by zero for very short periods
+            simple_annual_return_pct = total_return_pct / years
+        else:
+            # If holding period is effectively zero, annual return is ambiguous.
+            # Could return total_return_pct or 0. Let's return 0 for clarity.
+            simple_annual_return_pct = 0.0
 
     # Return the number of coupons as well
-    return fv_total, total_return_pct, annual_return_pct, years, num_future_coupons
+    return fv_total, total_return_pct, simple_annual_return_pct, years, num_future_coupons
 
+# --- End calculate_returns ---
 
 # --- Start of YTM Calculation Logic ---
 
@@ -445,8 +456,8 @@ def main():
         # Calculate Duration and Convexity
         mod_duration, convexity_val = calculate_duration_convexity(ytm_decimal, dirty_price_calc, cash_flows_calc, w_factor_calc)
 
-        # Calculate simplified returns (no reinvestment)
-        fv, total_return, annual_return, years, num_coupons = calculate_returns(coupon, maturity, price)
+        # Calculate simplified returns (no reinvestment) - now returns simple annual return
+        fv, total_return, simple_annual_return, years, num_coupons = calculate_returns(coupon, maturity, price) # Renamed variable
 
         # Get interpolated benchmark yield and bounds
         benchmark_label, benchmark_yield, lower_bm_yield, upper_bm_yield = get_comparable_yield(maturity, debug=debug)
@@ -528,10 +539,14 @@ def main():
         print(f"Grade: {color_grade(grade)} {grade_explanation}")
 
         print(color_header(f"\nSimplified Return Projection ({num_coupons} coupons held, 0% reinvestment)"))
-        print(f"Holding Period: {years:.2f} years")
+        # Use settlement date for holding period start
+        settlement_dt_print = datetime.date.today() + datetime.timedelta(days=SETTLEMENT_LAG_DAYS)
+        print(f"Holding Period: {years:.2f} years (from {settlement_dt_print} to {maturity})") # Clarified period
         print(f"Future Value (Principal + Coupons): {color_value(f'${fv:.2f}')}")
         print(f"Total Return (Projected): {color_value(f'{total_return:.2f}%')}")
-        print(f"Annualized Return (Projected): {color_value(f'{annual_return:.2f}%')}")
+        # Updated label for clarity
+        print(f"Simple Avg Annual Return (Projected): {color_value(f'{simple_annual_return:.2f}%')}") # Updated label and variable
+
         # --- End Print Results ---
 
     except ValueError as e: # Catch specific input validation errors
