@@ -9,7 +9,7 @@ from dateutil.relativedelta import relativedelta
 from get_bond_yield import fetch_auction_yield  # Uses your existing API module
 import math # Needed for convexity calculation if using direct formula
 
-VERSION = "1.16" # Updated version
+VERSION = "1.17" # Updated version
 SETTLEMENT_LAG_DAYS = 1 # Use T+1 for Treasuries
 
 
@@ -21,7 +21,8 @@ USAGE:
     bond_return_calc.py <coupon> <maturity_MM/DD/YYYY> <price> [--debug]
 
 DESCRIPTION:
-    Computes Yield to Maturity (YTM) using standard Bond Equivalent Yield (BEY) conventions (T+1 settlement, Actual/Actual day count, semi-annual compounding).
+    Computes Yield to Maturity (YTM) using standard Bond Equivalent Yield (BEY) conventions.
+    BEY assumes semi-annual compounding (doubling the semi-annual yield) and uses an Actual/Actual day count for accrued interest. Settlement is T+1.
     Calculates Modified Duration and Convexity to assess interest rate risk.
     Compares the bond's YTM against an *interpolated* Treasury benchmark yield derived from the two closest standard Treasury maturities. This provides a more precise comparison point for the bond's specific maturity.
     Also shows a simplified total return assuming coupons are held until maturity (not reinvested).
