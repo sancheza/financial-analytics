@@ -8,8 +8,7 @@ from scipy.optimize import newton
 from dateutil.relativedelta import relativedelta
 from get_bond_yield import fetch_auction_yield  # Uses your existing API module
 
-VERSION = "1.09" # Updated version
-REINVESTMENT_RATE = 0.043
+VERSION = "1.10" # Updated version
 SETTLEMENT_LAG_DAYS = 1 # Use T+1 for Treasuries
 
 
@@ -21,10 +20,9 @@ USAGE:
     bond_return_calc.py <coupon> <maturity_MM/DD/YYYY> <price> [--debug]
 
 DESCRIPTION:
-    Computes total compounded return and annualized return assuming {REINVESTMENT_RATE * 100:.1f}% couponreinvestment on interest earned.
-    You may change that by updating the REINVESTMENT_RATE variable.
-    Also computes true Yield to Maturity (YTM) using standard Bond Equivalent Yield (BEY) conventions (T+1 settlement, Actual/Actual day count, semi-annual compounding).
+    Computes Yield to Maturity (YTM) using standard Bond Equivalent Yield (BEY) conventions (T+1 settlement, Actual/Actual day count, semi-annual compounding).
     Compares against the most recent Treasury auction yield with greater-or-equal maturity (e.g. 30Y).
+    Also shows a simplified total return assuming coupons are held until maturity (not reinvested).
     Input format matches E*TRADE bond listings, e.g. bond_return_calc.py 4.625 01/31/2025 99.75
 
 OPTIONS:
@@ -38,22 +36,35 @@ def print_version():
     print(f"bond_return_calc.py version {VERSION}")
 
 
-def future_value_of_coupons(coupon: float, rate: float, years: float) -> float:
-    # Note: This FV calculation is simplified and doesn't align with BEY YTM conventions
-    # It assumes annual compounding at the reinvestment rate.
-    # For simplicity, leaving this as is, but be aware it's not directly comparable to YTM.
-    return coupon * (((1 + rate) ** years - 1) / rate)
-
-
-def calculate_returns(coupon: float, maturity: datetime.date, price: float, reinvest_rate: float = REINVESTMENT_RATE):
-    # Note: This calculation uses simple year fractions and doesn't match bond math precisely.
+def calculate_returns(coupon_rate: float, maturity: datetime.date, price: float, face_value: float = 100):
+    """
+    Calculates simplified total/annual return assuming coupons are held (0% reinvestment).
+    Note: This calculation uses simple year fractions and doesn't match bond math precisely.
+    Returns: Tuple[float, float, float, float, int] -> fv_total, total_return_pct, annual_return_pct, years, num_future_coupons
+    """
     today = datetime.date.today()
-    years = (maturity - today).days / 365.25 # Simple approximation
-    fv_coupons = future_value_of_coupons(coupon, reinvest_rate, years)
-    fv_total = fv_coupons + 100  # Face value
+    # Assuming weekends/holidays are handled by simply adding days.
+    settlement_date = today + datetime.timedelta(days=SETTLEMENT_LAG_DAYS)
+    years = (maturity - today).days / 365.25 # Simple approximation for annualization
+
+    # Calculate total value of coupons received from settlement until maturity
+    coupon_amt_semi_annual = (coupon_rate / 100.0 * face_value) / 2.0
+    all_coupon_dates = get_coupon_dates(maturity, settlement_date) # Use existing helper
+    future_coupon_dates = [d for d in all_coupon_dates if d > settlement_date]
+    num_future_coupons = len(future_coupon_dates) # Number of coupons counted
+    total_coupons_value = num_future_coupons * coupon_amt_semi_annual
+
+    fv_total = face_value + total_coupons_value  # Final value = Principal + Sum of coupons received
+
     total_return_pct = ((fv_total / price) - 1) * 100
-    annual_return_pct = ((fv_total / price) ** (1 / years) - 1) * 100
-    return fv_total, total_return_pct, annual_return_pct, years
+    # Handle case where years might be very small or zero to avoid errors
+    if years > 1e-6: # Avoid division by zero or large exponents for near-zero years
+        annual_return_pct = ((fv_total / price) ** (1 / years) - 1) * 100
+    else:
+        annual_return_pct = 0.0 # Or handle as appropriate (e.g., return total_return_pct)
+
+    # Return the number of coupons as well
+    return fv_total, total_return_pct, annual_return_pct, years, num_future_coupons
 
 
 # --- Start of New/Modified YTM Calculation Logic ---
@@ -62,12 +73,32 @@ def get_coupon_dates(maturity_date: datetime.date, settlement_date: datetime.dat
     """Generates all coupon dates from maturity back to before settlement."""
     dates = []
     current_date = maturity_date
-    while current_date > settlement_date:
+    # Ensure we capture the maturity date itself if it's a coupon date
+    if current_date >= settlement_date:
+         dates.append(current_date)
+
+    while True:
+        prev_date = current_date - relativedelta(months=6)
+        if prev_date < settlement_date:
+            # Add the last coupon date *before* settlement if needed for accrued interest calc later
+            # but don't add it to the list of *future* coupon dates for return calc.
+            # The get_coupon_dates is also used by YTM calc, so need to handle both cases.
+            # Let's adjust the logic slightly: generate all dates back to *before* settlement
+            break # Stop before adding dates prior to settlement
+        dates.append(prev_date)
+        current_date = prev_date
+
+    # The YTM function needs the coupon date *before* settlement too.
+    # Let's refine this: get *all* dates, then filter later where needed.
+    dates = []
+    current_date = maturity_date
+    while True:
         dates.append(current_date)
-        # Go back 6 months precisely
         current_date -= relativedelta(months=6)
-    # Add the last coupon date that occurred *before* or on the settlement date
-    dates.append(current_date)
+        # Stop when the generated date is clearly before the period relevant to settlement
+        if current_date < settlement_date - relativedelta(months=7):
+             break
+
     return sorted(dates)
 
 def calculate_actual_actual_days(start_date: datetime.date, end_date: datetime.date) -> int:
@@ -225,8 +256,9 @@ def main():
         # Calculate YTM using the new BEY method
         ytm = calculate_ytm(price, coupon, maturity) # Calls calculate_ytm_bey
 
-        # Keep the simplified return calculation for comparison/reference, but YTM is primary
-        fv, total_return, annual_return, years = calculate_returns(coupon, maturity, price)
+        # Calculate simplified returns (no reinvestment)
+        # Capture the number of coupons returned
+        fv, total_return, annual_return, years, num_coupons = calculate_returns(coupon, maturity, price) # Pass coupon rate
 
         duration_code, benchmark_yield = get_comparable_yield(maturity, debug=debug)
         benchmark_yield_pct = benchmark_yield * 100
@@ -253,25 +285,26 @@ def main():
         def color_header(val: str) -> str:
             return f"\033[1m{CYAN}{val}{RESET}"
 
+
         print(color_header("\nBond Details"))
         print(f"Coupon: {coupon:.3f}% | Maturity: {maturity} | Price: ${price:.3f}")
         print(f"Settlement Date (T+1): {datetime.date.today() + datetime.timedelta(days=SETTLEMENT_LAG_DAYS)}")
         print(color_header("\nCalculated Yield"))
         print(f"Yield to Maturity (BEY): {color_value(f'{ytm:.3f}%')}")
 
-        print(color_header("\nBenchmark Comparison"))   
+        print(color_header("\nBenchmark Comparison"))
         print(f"Comparable Treasury ({duration_code}): {color_value(f'{benchmark_yield_pct:.3f}%')}")
         ytm_diff_bps = (ytm - benchmark_yield_pct) * 100
         print(f"Spread vs Benchmark: {color_value(f'{ytm_diff_bps:+.1f} bps')}")
-        print(f"Grade: {color_grade(grade)}")
+        print(f"Grade: {color_grade(grade)}") # Keep grade based on YTM
 
-        # Optional: Display the simplified return calculation results
-        print(color_header(f"\nSimplified Return Projection (assumes reinvestment @ {REINVESTMENT_RATE*100:.1f}%)")) 
+        # Updated: Display the simplified return calculation results (no reinvestment)
+        # Include num_coupons in the header
+        print(color_header(f"\nSimplified Return Projection ({num_coupons} coupons held, 0% reinvestment)")) # Updated header
         print(f"Holding Period: {years:.2f} years")
-        print(f"Future Value (incl. reinvested coupons): {color_value(f'${fv:.2f}')}")
+        print(f"Future Value (Principal + Coupons): {color_value(f'${fv:.2f}')}") # Updated label
         print(f"Total Return (Projected): {color_value(f'{total_return:.2f}%')}")
         print(f"Annualized Return (Projected): {color_value(f'{annual_return:.2f}%')}")
-
 
     except ValueError as e:
         print(f"Error: Invalid input format - {e}")
