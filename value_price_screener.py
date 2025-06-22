@@ -29,13 +29,14 @@ from datetime import datetime
 import argparse
 import time  # Added for rate limiting
 import requests
-from pathlib import Path
 import json
+from pathlib import Path
 from io import StringIO
 import warnings
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO as IOStringIO
+import wcwidth  # Add this import at the top of your file
 
 __version__ = '1.0.5'
 
@@ -466,157 +467,364 @@ def get_pb_for_year(stock, year, verbose=False):
     except Exception as e:
         return None, f"Error calculating P/B: {str(e)}"
 
-def get_historical_book_value_per_share(stock, year):
-    """
-    Get historical book value per share for a specific year using yfinance with retry logic.
-    Enhanced to work with delisted companies by focusing on historical financials.
-    """
-    max_retries = 3
+def get_cik_from_ticker(ticker):
+    """Get CIK (Central Index Key) from ticker symbol using SEC company tickers file"""
+    cache_dir = Path("./data/cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cik_cache_file = cache_dir / "sec_cik_mapping.json"
     
-    for attempt in range(max_retries):
+    # Check if we have cached CIK mapping
+    if cik_cache_file.exists():
         try:
-            time.sleep(1 + attempt)  # Progressive delay
-            
-            # Suppress warnings during data retrieval
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                
-                # Method 1: Try to get annual balance sheet data and calculate BVPS
-                try:
-                    balance_sheet = stock.balance_sheet
-                    if not balance_sheet.empty:
-                        # Look for the target year
-                        target_col = None
-                        for col in balance_sheet.columns:
-                            try:
-                                col_year = pd.to_datetime(col).year
-                                if col_year == year:
-                                    target_col = col
-                                    break
-                            except:
-                                continue
-                        
-                        if target_col is not None:
-                            # Try different stockholders equity field names
-                            stockholders_equity = None
-                            for field in ['Stockholders Equity', 'Total Stockholder Equity', 'StockholdersEquity', 'Total Equity']:
-                                if field in balance_sheet.index:
-                                    stockholders_equity = balance_sheet.at[field, target_col]
-                                    break
-                            
-                            if stockholders_equity and not pd.isna(stockholders_equity):
-                                # Try to get historical shares outstanding from balance sheet or cash flow
-                                shares = None
-                                
-                                # First try to get shares from cash flow statement
-                                try:
-                                    cash_flow = stock.cashflow
-                                    if not cash_flow.empty:
-                                        for cf_col in cash_flow.columns:
-                                            try:
-                                                cf_year = pd.to_datetime(cf_col).year
-                                                if cf_year == year:
-                                                    for shares_field in ['Shares Outstanding', 'Common Stock Shares Outstanding', 'SharesOutstanding']:
-                                                        if shares_field in cash_flow.index:
-                                                            shares_val = cash_flow.at[shares_field, cf_col]
-                                                            if shares_val and not pd.isna(shares_val) and shares_val > 0:
-                                                                shares = shares_val
-                                                                break
-                                                    if shares:
-                                                        break
-                                            except:
-                                                continue
-                                except:
-                                    pass
-                                
-                                # REMOVE THIS BUGGY FALLBACK - Don't mix historical and current data
-                                # if not shares:
-                                #     try:
-                                #         info = stock.info
-                                #         if info:
-                                #             shares = info.get('sharesOutstanding')
-                                #     except:
-                                #         pass
-                                
-                                # Calculate BVPS ONLY if we have historical shares
-                                if shares and shares > 0:
-                                    return stockholders_equity / shares
-                                else:
-                                    # No historical shares found - return None instead of using current shares
-                                    return None
-                except Exception as e:
-                    if "Too Many Requests" in str(e) and attempt < max_retries - 1:
-                        time.sleep(10 * (attempt + 1))
-                        continue
-                    pass
-                
-                # Method 2: Try quarterly balance sheet data and find closest quarter
-                try:
-                    quarterly_balance = stock.quarterly_balance_sheet
-                    if not quarterly_balance.empty:
-                        target_quarters = []
-                        for col in quarterly_balance.columns:
-                            try:
-                                col_year = pd.to_datetime(col).year
-                                if col_year == year:
-                                    target_quarters.append(col)
-                            except:
-                                continue
-                        
-                        if target_quarters:
-                            # Use the latest quarter of the target year
-                            latest_quarter = max(target_quarters)
-                            
-                            # Get stockholders equity
-                            stockholders_equity = None
-                            for field in ['Stockholders Equity', 'Total Stockholder Equity', 'StockholdersEquity', 'Total Equity']:
-                                if field in quarterly_balance.index:
-                                    stockholders_equity = quarterly_balance.at[field, latest_quarter]
-                                    break
-                            
-                            if stockholders_equity and not pd.isna(stockholders_equity):
-                                # Try to get shares from quarterly cash flow
-                                try:
-                                    quarterly_cash = stock.quarterly_cashflow
-                                    if not quarterly_cash.empty and latest_quarter in quarterly_cash.columns:
-                                        for shares_field in ['Shares Outstanding', 'Common Stock Shares Outstanding', 'SharesOutstanding']:
-                                            if shares_field in quarterly_cash.index:
-                                                shares = quarterly_cash.at[shares_field, latest_quarter]
-                                                if shares and not pd.isna(shares) and shares > 0:
-                                                    return stockholders_equity / shares
-                                except:
-                                    pass
-                                
-                                # CRITICAL FIX: If no quarterly shares are found, do not proceed.
-                                return None
-                except Exception as e:
-                    if "Too Many Requests" in str(e) and attempt < max_retries - 1:
-                        time.sleep(10 * (attempt + 1))
-                        continue
-                    pass
-                
-                # Method 3: REMOVE fallback to current book value - causes inconsistency
-                # try:
-                #     info = stock.info
-                #     if info:
-                #         book_value = info.get('bookValue')
-                #         if book_value and book_value > 0:
-                #             return book_value
-                # except Exception as e:
-                #     if "Too Many Requests" in str(e) and attempt < max_retries - 1:
-                #         time.sleep(10 * (attempt + 1))
-                #         continue
-                #     pass
-            
-            return None
-            
-        except Exception as e:
-            if "Too Many Requests" in str(e) and attempt < max_retries - 1:
-                time.sleep(20 * (attempt + 1))
-                continue
-            break
+            with open(cik_cache_file, 'r') as f:
+                cik_mapping = json.load(f)
+            if ticker.upper() in cik_mapping:
+                return cik_mapping[ticker.upper()]
+        except:
+            pass
     
-    return None
+    # Download fresh CIK mapping from SEC
+    try:
+        headers = {
+            'User-Agent': 'Financial Analytics Script (your-email@example.com)'  # SEC requires User-Agent
+        }
+        
+        response = requests.get(
+            'https://www.sec.gov/files/company_tickers.json',
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        # Parse the data and create ticker -> CIK mapping
+        company_data = response.json()
+        cik_mapping = {}
+        
+        for company_info in company_data.values():
+            ticker_symbol = company_info.get('ticker', '').upper()
+            cik = str(company_info.get('cik_str', '')).zfill(10)  # Pad with zeros to 10 digits
+            if ticker_symbol and cik:
+                cik_mapping[ticker_symbol] = cik
+        
+        # Cache the mapping
+        with open(cik_cache_file, 'w') as f:
+            json.dump(cik_mapping, f, indent=2)
+        
+        return cik_mapping.get(ticker.upper())
+        
+    except Exception as e:
+        print(f"Error fetching CIK for {ticker}: {e}")
+        return None
+
+def get_edgar_balance_sheet_data(ticker, year):
+    """Get balance sheet data from SEC EDGAR API for a specific year"""
+    cik = get_cik_from_ticker(ticker)
+    if not cik:
+        return None
+    
+    try:
+        headers = {
+            'User-Agent': 'Financial Analytics Script (your-email@example.com)'  # SEC requires User-Agent
+        }
+        
+        # Get company facts (all historical financial data)
+        response = requests.get(
+            f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json',
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        company_facts = response.json()
+        
+        # Navigate to balance sheet data
+        facts = company_facts.get('facts', {})
+        us_gaap = facts.get('us-gaap', {})
+        
+        # Look for stockholders equity field
+        stockholders_equity_data = None
+        equity_fields = [
+            'StockholdersEquity',
+            'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+            'TotalStockholdersEquity'
+        ]
+        
+        for field in equity_fields:
+            if field in us_gaap:
+                stockholders_equity_data = us_gaap[field]
+                break
+        
+        if not stockholders_equity_data:
+            return None
+        
+        # Look for shares outstanding data
+        shares_data = None
+        shares_fields = [
+            'CommonStockSharesOutstanding',
+            'CommonSharesOutstanding',
+            'WeightedAverageNumberOfSharesOutstandingBasic'
+        ]
+        
+        for field in shares_fields:
+            if field in us_gaap:
+                shares_data = us_gaap[field]
+                break
+        
+        if not shares_data:
+            return None
+        
+        # Find data for the target year
+        target_equity = None
+        target_shares = None
+        
+        # Look for annual data (10-K filings) for the target year
+        for unit_data in stockholders_equity_data.get('units', {}).get('USD', []):
+            filing_date = unit_data.get('end', '')
+            form = unit_data.get('form', '')
+            
+            # Only use annual reports (10-K) and check if it's for our target year
+            if form == '10-K' and filing_date.startswith(str(year)):
+                target_equity = unit_data.get('val')
+                break
+        
+        for unit_data in shares_data.get('units', {}).get('shares', []):
+            filing_date = unit_data.get('end', '')
+            form = unit_data.get('form', '')
+            
+            # Only use annual reports (10-K) and check if it's for our target year
+            if form == '10-K' and filing_date.startswith(str(year)):
+                target_shares = unit_data.get('val')
+                break
+        
+        if target_equity and target_shares and target_shares > 0:
+            book_value_per_share = target_equity / target_shares
+            return book_value_per_share
+        
+        return None
+        
+    except Exception as e:
+        print(f"Error fetching EDGAR data for {ticker}: {e}")
+        return None
+
+# Replace the get_historical_book_value_per_share function with this EDGAR-based version:
+
+def get_edgar_stockholders_equity(ticker, year):
+    """Get only stockholders equity from EDGAR (ignore shares data due to split issues)"""
+    cik = get_cik_from_ticker(ticker)
+    if not cik:
+        return None
+    
+    try:
+        headers = {'User-Agent': 'Financial Analytics Script (your-email@example.com)'}
+        
+        response = requests.get(
+            f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json',
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        company_facts = response.json()
+        facts = company_facts.get('facts', {})
+        us_gaap = facts.get('us-gaap', {})
+        
+        # Look for stockholders equity
+        equity_fields = [
+            'StockholdersEquity',
+            'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+            'TotalStockholdersEquity'
+        ]
+        
+        for field in equity_fields:
+            if field in us_gaap:
+                equity_data = us_gaap[field]
+                
+                # Find 10-K filing for target year
+                for unit_data in equity_data.get('units', {}).get('USD', []):
+                    filing_date = unit_data.get('end', '')
+                    form = unit_data.get('form', '')
+                    
+                    if form == '10-K' and filing_date.startswith(str(year)):
+                        return unit_data.get('val')
+        
+        return None
+        
+    except Exception as e:
+        print(f"Error fetching EDGAR equity for {ticker}: {e}")
+        return None
+
+def get_stock_split_factor(ticker, from_date, to_date):
+    """Get cumulative split factor using yfinance (fallback from Polygon.io)"""
+    try:
+        # Try Polygon.io first (will fail with 401 but worth trying)
+        url = f"https://api.polygon.io/v3/reference/splits?ticker={ticker}&execution_date.gte={from_date}&execution_date.lte={to_date}&limit=1000"
+        
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            splits = data.get('results', [])
+            
+            split_factor = 1.0
+            for split in splits:
+                split_from = split.get('split_from', 1)
+                split_to = split.get('split_to', 1)
+                if split_from and split_to and split_from > 0:
+                    ratio = split_to / split_from
+                    split_factor *= ratio
+            
+            return split_factor
+        
+    except Exception:
+        pass
+    
+    # Fallback to yfinance
+    try:
+        import yfinance as yf
+        stock = yf.Ticker(ticker)
+        
+        from_year = int(from_date[:4])
+        to_year = int(to_date[:4])
+        
+        return get_stock_split_factor_yfinance(stock, from_year, to_year)
+        
+    except Exception as e:
+        print(f"Error getting split data for {ticker}: {e}")
+        return 1.0
+
+def get_stock_split_factor_yfinance(stock, from_year, to_year):
+    """Calculate cumulative stock split factor using yfinance historical data"""
+    try:
+        # Get stock actions (splits, dividends) from yfinance
+        actions = stock.actions
+        if actions.empty:
+            return 1.0
+        
+        # Create timezone-aware datetime objects to match yfinance index
+        from_date = pd.Timestamp(f"{from_year}-12-31").tz_localize('America/New_York')
+        to_date = pd.Timestamp(f"{to_year}-12-31").tz_localize('America/New_York')
+        
+        # Handle case where actions index might not be timezone-aware
+        if actions.index.tz is None:
+            # If actions index is not timezone-aware, convert our timestamps to naive
+            from_date = pd.Timestamp(f"{from_year}-12-31")
+            to_date = pd.Timestamp(f"{to_year}-12-31")
+        elif actions.index.tz != from_date.tz:
+            # Convert to match the timezone of the actions index
+            from_date = from_date.tz_convert(actions.index.tz)
+            to_date = to_date.tz_convert(actions.index.tz)
+        
+        # Stock splits show up as values != 0 in the 'Stock Splits' column
+        splits_in_range = actions[(actions.index > from_date) & 
+                                 (actions.index <= to_date) & 
+                                 (actions['Stock Splits'] != 0)]
+        
+        if splits_in_range.empty:
+            return 1.0
+        
+        # Calculate cumulative split factor
+        split_factor = 1.0
+        for split_ratio in splits_in_range['Stock Splits']:
+            if split_ratio > 0:
+                split_factor *= split_ratio
+        
+        return split_factor
+        
+    except Exception as e:
+        print(f"Error calculating split factor: {e}")
+        return 1.0
+
+def get_edgar_shares_outstanding(ticker, year):
+    """Get raw shares outstanding from EDGAR for a specific year"""
+    cik = get_cik_from_ticker(ticker)
+    if not cik:
+        return None
+    
+    try:
+        headers = {'User-Agent': 'Financial Analytics Script (your-email@example.com)'}
+        
+        response = requests.get(
+            f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json',
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        company_facts = response.json()
+        facts = company_facts.get('facts', {})
+        us_gaap = facts.get('us-gaap', {})
+        
+        # Look for shares outstanding
+        shares_fields = [
+            'CommonStockSharesOutstanding',
+            'CommonSharesOutstanding',
+            'WeightedAverageNumberOfSharesOutstandingBasic',
+            'CommonStockSharesIssued'
+        ]
+        
+        for field in shares_fields:
+            if field in us_gaap:
+                shares_data = us_gaap[field]
+                
+                # Find 10-K filing for target year
+                for unit_data in shares_data.get('units', {}).get('shares', []):
+                    filing_date = unit_data.get('end', '')
+                    form = unit_data.get('form', '')
+                    
+                    if form == '10-K' and filing_date.startswith(str(year)):
+                        return unit_data.get('val')
+        
+        return None
+        
+    except Exception as e:
+        print(f"Error fetching EDGAR shares for {ticker}: {e}")
+        return None
+
+def get_split_adjusted_edgar_bvps(ticker, year):
+    """Get split-adjusted book value per share using EDGAR + Polygon splits"""
+    
+    # Step 1: Get raw data from EDGAR
+    stockholders_equity = get_edgar_stockholders_equity(ticker, year)
+    raw_shares = get_edgar_shares_outstanding(ticker, year)
+    
+    if not stockholders_equity or not raw_shares:
+        return None
+    
+    # Step 2: Get split factor from target year to today
+    from_date = f"{year}-12-31"
+    to_date = datetime.now().strftime("%Y-%m-%d")
+    split_factor = get_stock_split_factor(ticker, from_date, to_date)
+    
+    # Step 3: Apply split adjustment to shares
+    split_adjusted_shares = raw_shares * split_factor
+    
+    # Step 4: Calculate split-adjusted BVPS
+    book_value_per_share = stockholders_equity / split_adjusted_shares
+    
+    return book_value_per_share
+
+def get_historical_book_value_per_share_corrected(stock, year):
+    """
+    Get historical book value per share using EDGAR equity data with Polygon split adjustments.
+    This corrects for stock split inconsistencies between raw SEC data and adjusted price data.
+    """
+    ticker = stock.ticker
+    
+    # Try the new split-adjusted EDGAR approach
+    split_adjusted_bvps = get_split_adjusted_edgar_bvps(ticker, year)
+    if split_adjusted_bvps:
+        return split_adjusted_bvps
+    
+    # Fallback to the old corrected approach
+    stockholders_equity = get_edgar_stockholders_equity(ticker, year)
+    if not stockholders_equity:
+        return None
+    
+    split_adjusted_shares = get_split_adjusted_shares_outstanding(stock, year)
+    if not split_adjusted_shares:
+        return None
+    
+    book_value_per_share = stockholders_equity / split_adjusted_shares
+    return book_value_per_share
 
 def get_pe_for_year(stock, year, verbose=False):
     """
@@ -711,8 +919,10 @@ def get_price_gain(stock, year):
             
             price_start = get_year_start_price(stock, year)
             price_end = get_year_end_price(stock, year)
-            if price_start and price_end:
-                return ((price_end - price_start) / price_start) * 100
+            if price_start and price_end and price_start != 0:
+                gain = ((price_end - price_start) / price_start) * 100
+            else:
+                gain = None
     except Exception:
         pass
     return None
@@ -732,36 +942,6 @@ def get_year_start_price(stock, year):
     except Exception:
         pass
     return None
-
-def validate_ticker_data_quality(stock, ticker, target_year, verbose=False):
-    """
-    Validate if a ticker has sufficient data quality for analysis.
-    Returns (is_valid, status_message) tuple.
-    """
-    try:
-        # Test 1: Check if ticker has any recent data (validity check)
-        recent_data = stock.history(period="5d")
-        if recent_data.empty:
-            return False, "Ticker appears invalid (no recent data)"
-        
-        # Test 2: Check target year data availability
-        target_price = get_year_end_price(stock, target_year)
-        if target_price is None:
-            return False, f"No price data available for {target_year}"
-        
-        # Test 3: Check if we can get basic financial info
-        try:
-            info = stock.info
-            if not info or not info.get('longName'):
-                return False, "Limited company information available"
-        except:
-            # If info fails, still proceed if we have price data
-            pass
-        
-        return True, f"Data quality acceptable"
-        
-    except Exception as e:
-        return False, f"Data validation error: {str(e)}"
 
 def get_alternative_data_source_suggestion():
     """Suggest alternative data sources for better reliability"""
@@ -820,9 +1000,8 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
         # Remove ANSI escape sequences
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
         clean_text = ansi_escape.sub('', text)
-        # Count emoji characters as width 2 (they take 2 terminal columns)
-        emoji_count = len(re.findall(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\U00002700-\U000027BF\U0001F900-\U0001F9FF\U0001F018-\U0001F270]', clean_text))
-        return len(clean_text) + emoji_count
+        # Use wcwidth to get the correct display width for Unicode/emojis
+        return sum(wcwidth.wcwidth(char) for char in clean_text)
     
     def pad_text(text, width, align='center'):
         """Pad text to width, accounting for ANSI codes and emojis"""
@@ -904,7 +1083,7 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
         print(f"{colorize('│', Colors.OKBLUE)}", end="")
         
         # Column 3: Dividend years (cyan)
-        div_years = colorize(str(row['Div Years']), Colors.OKCYAN)
+        div_years = colorize(str(row.get('Div Years', 'N/A')), Colors.OKCYAN)
         print(pad_text(div_years, col_widths[2]), end="")
         print(f"{colorize('│', Colors.OKBLUE)}", end="")
         
@@ -1060,7 +1239,7 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
             if metric == 'pe':
                 ratio, error_msg = get_pe_for_year(stock, target_year, verbose=verbose)
                 data_type = "EPS"
-            else  # pb
+            else:  # pb
                 ratio, error_msg = get_pb_for_year(stock, target_year, verbose=verbose)
                 data_type = "book value"
             
@@ -1236,7 +1415,7 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
         ]])
         total_companies = len(tickers) if 'tickers' in locals() else len(results)
         
-        if total_errors > total_companies * 0.1:  # If >10% of tickers had errors
+        if total_companies > 0 and total_errors > total_companies * 0.1:  # If >10% of tickers had errors
             print(f"\n⚠️  DATA QUALITY NOTICE:")
             print(f"   {total_errors} out of {total_companies} companies ({total_errors/total_companies*100:.1f}%) had data issues.")
             print(f"   This may indicate Yahoo Finance API limitations.")
