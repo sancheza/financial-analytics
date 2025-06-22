@@ -804,27 +804,21 @@ def get_split_adjusted_edgar_bvps(ticker, year):
 
 def get_historical_book_value_per_share_corrected(stock, year):
     """
-    Get historical book value per share using EDGAR equity data with Polygon split adjustments.
+    Get historical book value per share using EDGAR equity data with split adjustments.
     This corrects for stock split inconsistencies between raw SEC data and adjusted price data.
     """
     ticker = stock.ticker
     
-    # Try the new split-adjusted EDGAR approach
+    # Use the split-adjusted EDGAR approach only
     split_adjusted_bvps = get_split_adjusted_edgar_bvps(ticker, year)
-    if split_adjusted_bvps:
-        return split_adjusted_bvps
-    
-    # Fallback to the old corrected approach
-    stockholders_equity = get_edgar_stockholders_equity(ticker, year)
-    if not stockholders_equity:
-        return None
-    
-    split_adjusted_shares = get_split_adjusted_shares_outstanding(stock, year)
-    if not split_adjusted_shares:
-        return None
-    
-    book_value_per_share = stockholders_equity / split_adjusted_shares
-    return book_value_per_share
+    return split_adjusted_bvps
+
+def get_historical_book_value_per_share(stock, year):
+    """
+    Compatibility wrapper for get_historical_book_value_per_share_corrected.
+    This function maintains backward compatibility while using the corrected approach.
+    """
+    return get_historical_book_value_per_share_corrected(stock, year)
 
 def get_pe_for_year(stock, year, verbose=False):
     """
