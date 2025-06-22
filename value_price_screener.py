@@ -734,7 +734,7 @@ def get_stock_split_factor_yfinance(stock, from_year, to_year):
         return 1.0
 
 def get_edgar_shares_outstanding(ticker, year):
-    """Get raw shares outstanding from EDGAR for a specific year"""
+    """Get raw shares outstanding from EDGAR for a specific year with enhanced units correction"""
     cik = get_cik_from_ticker(ticker)
     if not cik:
         return None
@@ -761,6 +761,8 @@ def get_edgar_shares_outstanding(ticker, year):
             'CommonStockSharesIssued'
         ]
         
+        raw_shares = None
+        
         for field in shares_fields:
             if field in us_gaap:
                 shares_data = us_gaap[field]
@@ -771,9 +773,52 @@ def get_edgar_shares_outstanding(ticker, year):
                     form = unit_data.get('form', '')
                     
                     if form == '10-K' and filing_date.startswith(str(year)):
-                        return unit_data.get('val')
+                        raw_shares = unit_data.get('val')
+                        break
+                
+                if raw_shares:
+                    break
         
-        return None
+        if not raw_shares:
+            return None
+        
+        # ENHANCED UNITS CORRECTION: Multiple heuristics to detect wrong units
+        
+        # Heuristic 1: Any shares count under 1 million is suspicious for a public company
+        if raw_shares < 1000000:
+            equity = get_edgar_stockholders_equity(ticker, year)
+            
+            if equity and equity > 100000000:  # Equity > $100M (lowered threshold)
+                if raw_shares < 1000:  # Likely in millions
+                    corrected_shares = raw_shares * 1000000
+                    print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (assumed millions)")
+                    return corrected_shares
+                elif raw_shares < 1000000:  # Likely in thousands
+                    corrected_shares = raw_shares * 1000
+                    print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (assumed thousands)")
+                    return corrected_shares
+        
+        # Heuristic 2: Book value per share > $1000 is almost always wrong
+        if raw_shares > 0:
+            equity = get_edgar_stockholders_equity(ticker, year)
+            if equity:
+                potential_bvps = equity / raw_shares
+                if potential_bvps > 1000:  # BVPS > $1000 is extremely suspicious
+                    if raw_shares < 1000:  # Try millions first
+                        corrected_shares = raw_shares * 1000000
+                        corrected_bvps = equity / corrected_shares
+                        if 1 <= corrected_bvps <= 500:  # Reasonable BVPS range
+                            print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (BVPS fix: ${potential_bvps:.0f} → ${corrected_bvps:.2f})")
+                            return corrected_shares
+                    
+                    if raw_shares < 1000000:  # Try thousands
+                        corrected_shares = raw_shares * 1000
+                        corrected_bvps = equity / corrected_shares
+                        if 1 <= corrected_bvps <= 500:  # Reasonable BVPS range
+                            print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (BVPS fix: ${potential_bvps:.0f} → ${corrected_bvps:.2f})")
+                            return corrected_shares
+        
+        return raw_shares
         
     except Exception as e:
         print(f"Error fetching EDGAR shares for {ticker}: {e}")
@@ -1214,6 +1259,7 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
                 print_progress_bar(0, len(tickers), 
                                  prefix=f'Processing S&P 500 companies', 
                                  suffix='Starting...')
+                print()  # ADD THIS LINE - creates carriage return after initial progress bar
         
         # Rate limiting
         if i > 0 and i % 10 == 0:
