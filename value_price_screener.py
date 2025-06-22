@@ -782,41 +782,42 @@ def get_edgar_shares_outstanding(ticker, year):
         if not raw_shares:
             return None
         
-        # ENHANCED UNITS CORRECTION: Multiple heuristics to detect wrong units
-        
-        # Heuristic 1: Any shares count under 1 million is suspicious for a public company
-        if raw_shares < 1000000:
-            equity = get_edgar_stockholders_equity(ticker, year)
+        # AGGRESSIVE UNITS CORRECTION: Always check BVPS first
+        equity = get_edgar_stockholders_equity(ticker, year)
+        if equity and raw_shares > 0:
+            potential_bvps = equity / raw_shares
             
-            if equity and equity > 100000000:  # Equity > $100M (lowered threshold)
-                if raw_shares < 1000:  # Likely in millions
-                    corrected_shares = raw_shares * 1000000
-                    print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (assumed millions)")
-                    return corrected_shares
-                elif raw_shares < 1000000:  # Likely in thousands
+            # If BVPS > $1000, definitely wrong units
+            if potential_bvps > 1000:
+                print(f"   🚨 {ticker}: Detected units issue - BVPS would be ${potential_bvps:,.0f}")
+                
+                # Try thousands correction first (most common)
+                if raw_shares < 10000000:  # Less than 10M shares is suspicious
                     corrected_shares = raw_shares * 1000
-                    print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (assumed thousands)")
+                    corrected_bvps = equity / corrected_shares
+                    if 1 <= corrected_bvps <= 1000:  # Reasonable BVPS range
+                        print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (BVPS: ${potential_bvps:.0f} → ${corrected_bvps:.2f})")
+                        return corrected_shares
+                
+                # Try millions correction if thousands didn't work
+                if raw_shares < 10000:  # Less than 10k shares definitely needs millions
+                    corrected_shares = raw_shares * 1000000
+                    corrected_bvps = equity / corrected_shares
+                    if 1 <= corrected_bvps <= 1000:  # Reasonable BVPS range
+                        print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (BVPS: ${potential_bvps:.0f} → ${corrected_bvps:.2f})")
+                        return corrected_shares
+                
+                # If both corrections failed, warn but return original
+                print(f"   ⚠️ {ticker}: Could not correct units - BVPS still ${potential_bvps:,.0f}")
+            
+            # Additional check: If shares < 10M for a company with >$1B equity, likely wrong
+            elif equity > 1000000000 and raw_shares < 10000000:
+                print(f"   🔍 {ticker}: Large company with suspiciously low share count")
+                corrected_shares = raw_shares * 1000
+                corrected_bvps = equity / corrected_shares
+                if 1 <= corrected_bvps <= 500:
+                    print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (preventive correction)")
                     return corrected_shares
-        
-        # Heuristic 2: Book value per share > $1000 is almost always wrong
-        if raw_shares > 0:
-            equity = get_edgar_stockholders_equity(ticker, year)
-            if equity:
-                potential_bvps = equity / raw_shares
-                if potential_bvps > 1000:  # BVPS > $1000 is extremely suspicious
-                    if raw_shares < 1000:  # Try millions first
-                        corrected_shares = raw_shares * 1000000
-                        corrected_bvps = equity / corrected_shares
-                        if 1 <= corrected_bvps <= 500:  # Reasonable BVPS range
-                            print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (BVPS fix: ${potential_bvps:.0f} → ${corrected_bvps:.2f})")
-                            return corrected_shares
-                    
-                    if raw_shares < 1000000:  # Try thousands
-                        corrected_shares = raw_shares * 1000
-                        corrected_bvps = equity / corrected_shares
-                        if 1 <= corrected_bvps <= 500:  # Reasonable BVPS range
-                            print(f"   📊 EDGAR shares correction for {ticker}: {raw_shares:,.0f} → {corrected_shares:,.0f} (BVPS fix: ${potential_bvps:.0f} → ${corrected_bvps:.2f})")
-                            return corrected_shares
         
         return raw_shares
         
@@ -1214,7 +1215,7 @@ def print_progress_bar(current, total, prefix='Progress', suffix='Complete', len
     if current == total:
         print()  # New line when complete
 
-def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield=DEFAULT_DIVIDEND_YIELD, min_dividend_years=DEFAULT_MIN_DIVIDEND_YEARS, verbose=False):
+def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield=DEFAULT_DIVIDEND_YIELD, min_dividend_years=DEFAULT_MIN_DIVIDEND_YEARS, verbose=False, debug=False):
     # Suppress yfinance logging to reduce noise
     import logging
     logging.getLogger('yfinance').setLevel(logging.CRITICAL)
@@ -1269,7 +1270,7 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
             stock, should_process = create_ticker_with_suppression(ticker)
             if not should_process:
                 errors_summary['other'] += 1
-                if verbose:
+                if verbose or debug:
                     print(f"  ❌ {ticker}: Failed to create ticker object")
                 elif processed <= 20:
                     print(f"  ❌ {ticker}: Failed to create ticker object")
@@ -1287,9 +1288,9 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
                 companies_with_ratio.append({
                     'ticker': ticker,
                     'ratio': ratio,
-                    'stock_obj': stock  # Keep for later use
+                    'stock_obj': stock
                 })
-                if verbose:
+                if verbose or debug:
                     print(f"  ✓ {ticker}: {metric_name} = {ratio:.2f}")
             else:
                 # Categorize the error for summary
@@ -1305,15 +1306,15 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
                     else:
                         errors_summary['other'] += 1
                 
-                if verbose:
+                if verbose or debug:
                     print(f"  ❌ {ticker}: {error_msg}")
                 elif processed <= 20:  # Show first 20 errors even in non-verbose mode
                     print(f"  ❌ {ticker}: {error_msg}")
-                
+            
         except Exception as e:
             errors_summary['other'] += 1
             error_msg = f"Processing error: {str(e)}"
-            if verbose:
+            if verbose or debug:
                 print(f"  ❌ {ticker}: {error_msg}")
             elif processed <= 20:
                 print(f"  ❌ {ticker}: {error_msg}")
@@ -1549,6 +1550,8 @@ For implementation details and calculation methodologies, see the script header 
                         help=f"Minimum consecutive years of dividend payments required (ensures dividend quality) (default: {DEFAULT_MIN_DIVIDEND_YEARS})")
     parser.add_argument("--verbose", action="store_true", 
                         help="Enable detailed progress output showing individual ticker processing and ratios")
+    parser.add_argument("--debug", action="store_true", 
+                    help="Enable debug mode showing P/B calculation details for every ticker (very verbose)")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {__version__}")
     
     args = parser.parse_args()
@@ -1574,4 +1577,4 @@ For implementation details and calculation methodologies, see the script header 
         exit(1)
     
     main(args.year, count=args.count, metric=args.metric, dividend_yield=args.dividend_yield, 
-         min_dividend_years=args.min_dividend_years, verbose=args.verbose)
+         min_dividend_years=args.min_dividend_years, verbose=args.verbose, debug=args.debug)
