@@ -1502,7 +1502,7 @@ if __name__ == "__main__":
 S&P 500 Value Dividend Screener - Historical Analysis & Performance Tracking
 
 OVERVIEW:
-This tool implements a systematic value investing strategy by identifying historically undervalued
+This tool performs value analytics by identifying historically undervalued
 dividend-paying companies from the S&P 500 and measuring their subsequent performance. It enables
 rigorous backtesting of value investing principles using accurate historical data.
 
@@ -1547,7 +1547,9 @@ python value_price_screener.py 2020 --count 10 --dividend-yield 4.0 --min-divide
 DATA SOURCES & RELIABILITY:
 • S&P 500 Membership: Daily historical constituent data from hanshof/sp500_constituents (GitHub)
 • Financial Metrics: Yahoo Finance API with comprehensive error handling and validation
+• Book Value Data: SEC EDGAR API for stockholders equity and shares outstanding (official filings)
 • Dividend History: Multi-year dividend payment records and yield calculations
+• Stock Split Data: yfinance historical actions with Polygon.io fallback
 • Local Caching: Automatically caches data to reduce API calls and improve performance
 
 ⚠️  DATA QUALITY CONSIDERATIONS:
@@ -1556,11 +1558,10 @@ Yahoo Finance free API has known limitations including:
 - Missing historical data for some companies (especially around corporate events)
 - Inconsistent data quality for delisted or acquired companies
 
-ALTERNATIVE DATA SOURCES FOR PRODUCTION USE:
-1. Alpha Vantage API (free tier) - more reliable, better rate limits
-2. Financial Modeling Prep API (free tier) - comprehensive financial data
-3. Quandl/Nasdaq Data Link (paid) - institutional-grade data quality
-4. EDGAR SEC filings (free) - official company data, requires processing
+SEC EDGAR data provides the most reliable fundamental data but requires processing for:
+- Inconsistent units reporting (shares in actual vs thousands vs millions)
+- Stock split adjustments to align with current pricing
+- Mapping ticker symbols to CIK identifiers
 
 TECHNICAL NOTES:
 • Supports analysis from 2009 onwards (requires 2+ years of historical data)
