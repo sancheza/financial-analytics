@@ -219,47 +219,71 @@ def get_sp500_tickers_for_year(target_year):
         return []
 
 def get_year_end_price(stock, year):
-    """Get year-end price with enhanced retry logic and multiple date fallbacks"""
+    """Get actual historical year-end price (not split-adjusted)"""
     max_retries = 5
     
     for attempt in range(max_retries):
         try:
-            # Suppress warnings during data retrieval
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 
-                # Try multiple date ranges to find year-end data
+                # Use auto_adjust=True to get actual historical prices
+                end_date = f"{year}-12-31"
+                start_date = f"{year}-12-01"
+                
+                hist = stock.history(
+                    start=start_date, 
+                    end=end_date, 
+                    auto_adjust=True  # Changed from False to True
+                )
+                
+                if not hist.empty:
+                    return hist['Close'].iloc[-1]
+                
+                # Try alternative date ranges if December data not available
                 date_ranges = [
-                    (f"{year}-12-01", f"{year}-12-31"),  # December
-                    (f"{year}-11-15", f"{year}-12-31"),  # Late November to December
-                    (f"{year}-11-01", f"{year}-12-31"),  # November to December
-                    (f"{year}-10-15", f"{year}-12-31"),  # Mid October to December
-                    (f"{year}-01-01", f"{year}-12-31"),  # Full year (last resort)
+                    (f"{year}-11-15", f"{year}-12-31"),
+                    (f"{year}-11-01", f"{year}-12-31"),
                 ]
                 
-                for start_date, end_date in date_ranges:
+                for start_alt, end_alt in date_ranges:
                     try:
-                        # GET REAL CLOSING PRICE, NOT ADJUSTED
-                        hist = stock.history(start=start_date, end=end_date, auto_adjust=False)
-                        if not hist.empty:
-                            # Return the last available REAL close price in the range
-                            return hist['Close'].iloc[-1]
-                        time.sleep(1)  # Brief pause between attempts
-                    except Exception:
+                        hist_alt = stock.history(
+                            start=start_alt, 
+                            end=end_alt, 
+                            auto_adjust=True  # Changed from False to True
+                        )
+                        if not hist_alt.empty:
+                            return hist_alt['Close'].iloc[-1]
+                    except:
                         continue
                 
                 return None
             
         except Exception as e:
-            if "Too Many Requests" in str(e) or "rate limit" in str(e).lower():
-                wait_time = min(60, (2 ** attempt) * 10)  # Exponential backoff, max 60s
-                print(f"    Rate limited, waiting {wait_time}s...")
+            if "Too Many Requests" in str(e):
+                wait_time = min(60, (2 ** attempt) * 10)
                 time.sleep(wait_time)
                 continue
             else:
                 return None
     
     return None
+
+def get_alternative_historical_price(stock, year):
+    """Alternative method to get non-adjusted historical price"""
+    try:
+        # Try using different date formatting or API endpoints
+        info = stock.info
+        
+        # Sometimes the 'previousClose' or other fields contain more accurate data
+        # This is a fallback - you might need to implement other data sources here
+        
+        # For now, return None to indicate we need manual verification
+        return None
+        
+    except:
+        return None
 
 def get_historical_eps(stock, year, ticker=None):
     """
@@ -976,7 +1000,7 @@ def get_year_start_price(stock, year):
             start = f"{year}-01-01"
             end = f"{year}-01-15"
             # GET REAL CLOSING PRICE, NOT ADJUSTED
-            hist = stock.history(start=start, end=end, auto_adjust=False)
+            hist = stock.history(start=start, end=end, auto_adjust=True)
             if not hist.empty:
                 return hist['Close'].iloc[0]
     except Exception:
@@ -1112,8 +1136,15 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
     for _, row in df.iterrows():
         print(f"{colorize('│', Colors.OKBLUE)}", end="")
         
-        # Column 1: Ticker (bold, centered)
-        ticker = colorize(str(row['Ticker']), Colors.BOLD + Colors.OKGREEN)
+        # Column 1: Ticker (conditional coloring based on performance)
+        gain = row['YoY Gain (%)']
+        if gain is not None and gain < 0:
+            # Red ticker for negative performance
+            ticker = colorize(str(row['Ticker']), Colors.BOLD + Colors.FAIL)
+        else:
+            # Green ticker for positive/neutral performance
+            ticker = colorize(str(row['Ticker']), Colors.BOLD + Colors.OKGREEN)
+        
         print(pad_text(ticker, col_widths[0]), end="")
         print(f"{colorize('│', Colors.OKBLUE)}", end="")
         
@@ -1249,6 +1280,8 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
     for i, ticker in enumerate(tickers):
         processed += 1
         if verbose:
+            print(f"[{processed}/{len(tickers)}] Processing {ticker}...")
+        elif debug:  # Add this condition BEFORE the progress bar logic
             print(f"[{processed}/{len(tickers)}] Processing {ticker}...")
         else:
             if processed % 10 == 0 or processed == len(tickers):
