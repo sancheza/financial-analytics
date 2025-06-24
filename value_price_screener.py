@@ -454,7 +454,7 @@ def get_historical_eps(stock, year, ticker=None):
     
     return None
 
-def get_pb_for_year(stock, year, verbose=False):
+def get_pb_for_year(stock, year, verbose=False, debug=False):
     """
     Calculate HISTORICAL P/B ratio for a specific year.
     Uses year-end price and book value per share for that year.
@@ -467,6 +467,9 @@ def get_pb_for_year(stock, year, verbose=False):
             error_msg = f"No price data for {year}" if not price else f"Invalid price ${price:.2f}"
             return None, error_msg
         
+        if debug:
+            print(f"    📈 Year-end price ({year}): ${price:.2f}")
+        
         # Get book value per share for the year
         book_value_per_share = get_historical_book_value_per_share(stock, year)
         if not book_value_per_share:
@@ -474,8 +477,14 @@ def get_pb_for_year(stock, year, verbose=False):
         elif book_value_per_share <= 0:
             return None, f"Negative book value ${book_value_per_share:.2f} for {year}"
         
+        if debug:
+            print(f"    📚 Book value per share: ${book_value_per_share:.2f}")
+        
         # Calculate P/B = Price / Book Value per Share
         pb_ratio = price / book_value_per_share
+        
+        if debug:
+            print(f"    🧮 P/B calculation: ${price:.2f} ÷ ${book_value_per_share:.2f} = {pb_ratio:.2f}")
         
         # Sanity check - reject extreme values
         if pb_ratio <= 0:
@@ -849,8 +858,8 @@ def get_edgar_shares_outstanding(ticker, year):
         print(f"Error fetching EDGAR shares for {ticker}: {e}")
         return None
 
-def get_split_adjusted_edgar_bvps(ticker, year):
-    """Get split-adjusted book value per share using EDGAR + Polygon splits"""
+def get_split_adjusted_edgar_bvps(ticker, year, debug=False):
+    """Get split-adjusted book value per share using EDGAR + split adjustments"""
     
     # Step 1: Get raw data from EDGAR
     stockholders_equity = get_edgar_stockholders_equity(ticker, year)
@@ -859,38 +868,41 @@ def get_split_adjusted_edgar_bvps(ticker, year):
     if not stockholders_equity or not raw_shares:
         return None
     
+    if debug:
+        print(f"    📋 EDGAR stockholders equity: ${stockholders_equity:,.0f}")
+        print(f"    📊 EDGAR raw shares: {raw_shares:,.0f}")
+    
     # Step 2: Get split factor from target year to today
     from_date = f"{year}-12-31"
     to_date = datetime.now().strftime("%Y-%m-%d")
     split_factor = get_stock_split_factor(ticker, from_date, to_date)
     
+    if debug:
+        print(f"    🔄 Split factor ({year} to present): {split_factor:.4f}")
+    
     # Step 3: Apply split adjustment to shares
     split_adjusted_shares = raw_shares * split_factor
+    
+    if debug:
+        print(f"    📈 Split-adjusted shares: {split_adjusted_shares:,.0f}")
     
     # Step 4: Calculate split-adjusted BVPS
     book_value_per_share = stockholders_equity / split_adjusted_shares
     
+    if debug:
+        print(f"    💡 Final BVPS: ${stockholders_equity:,.0f} ÷ {split_adjusted_shares:,.0f} = ${book_value_per_share:.2f}")
+    
     return book_value_per_share
 
-def get_historical_book_value_per_share_corrected(stock, year):
-    """
-    Get historical book value per share using EDGAR equity data with split adjustments.
-    This corrects for stock split inconsistencies between raw SEC data and adjusted price data.
-    """
-    ticker = stock.ticker
-    
-    # Use the split-adjusted EDGAR approach only
-    split_adjusted_bvps = get_split_adjusted_edgar_bvps(ticker, year)
-    return split_adjusted_bvps
-
-def get_historical_book_value_per_share(stock, year):
+def get_historical_book_value_per_share(stock, year, debug=False):
     """
     Compatibility wrapper for get_historical_book_value_per_share_corrected.
     This function maintains backward compatibility while using the corrected approach.
     """
-    return get_historical_book_value_per_share_corrected(stock, year)
+    ticker = stock.ticker
+    return get_split_adjusted_edgar_bvps(ticker, year, debug=debug)
 
-def get_pe_for_year(stock, year, verbose=False):
+def get_pe_for_year(stock, year, verbose=False, debug=False):
     """
     Calculate HISTORICAL P/E ratio for a specific year.
     Uses year-end price and EPS for that year.
@@ -903,6 +915,9 @@ def get_pe_for_year(stock, year, verbose=False):
             error_msg = f"No price data for {year}" if not price else f"Invalid price ${price:.2f}"
             return None, error_msg
         
+        if debug:
+            print(f"    📈 Year-end price ({year}): ${price:.2f}")
+        
         # Get historical EPS for the year
         eps = get_historical_eps(stock, year)
         if not eps:
@@ -910,8 +925,14 @@ def get_pe_for_year(stock, year, verbose=False):
         elif eps <= 0:
             return None, f"Negative EPS ${eps:.2f} for {year}"
         
+        if debug:
+            print(f"    💰 Earnings per share: ${eps:.2f}")
+        
         # Calculate P/E = Price / EPS
         pe_ratio = price / eps
+        
+        if debug:
+            print(f"    🧮 P/E calculation: ${price:.2f} ÷ ${eps:.2f} = {pe_ratio:.2f}")
         
         # Sanity check - reject extreme values
         if pe_ratio <= 0:
@@ -964,7 +985,7 @@ def has_dividend_history(stock, year, min_years=5):
                 if dividends.empty:
                     return False
                 years = set(dividends.index.year)
-                needed = set(range(year - min_years + 1, year + 1))
+                needed = set(range(year - min_years + 1, year + 1))  # ✅ FIXED: use min_years not min_dividend_years
                 return needed.issubset(years)
         except Exception as e:
             if "Too Many Requests" in str(e) or "rate limit" in str(e).lower():
@@ -1311,10 +1332,10 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
             
             # Calculate the appropriate ratio based on metric
             if metric == 'pe':
-                ratio, error_msg = get_pe_for_year(stock, target_year, verbose=verbose)
+                ratio, error_msg = get_pe_for_year(stock, target_year, verbose=verbose, debug=debug)
                 data_type = "EPS"
             else:  # pb
-                ratio, error_msg = get_pb_for_year(stock, target_year, verbose=verbose)
+                ratio, error_msg = get_pb_for_year(stock, target_year, verbose=verbose, debug=debug)
                 data_type = "book value"
             
             if ratio is not None and ratio > 0:
@@ -1382,37 +1403,41 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
         ratio = company['ratio']
         stock = company['stock_obj']
         
-        if verbose:
+        if verbose or debug:  # Change this line to include debug
             print(f"\nChecking {ticker} ({metric_name}: {ratio:.2f})...")
         
         # Check dividend history
         has_div_hist = has_dividend_history(stock, target_year, min_years=min_dividend_years)
         if not has_div_hist:
-            if verbose:
-                print(f"  {ticker}: Missing dividend history for {target_year-min_dividend_years+1}-{target_year}")
+            if verbose or debug:  # Change this line to include debug
+                print(f"  ❌ {ticker}: Missing dividend history for {target_year-min_dividend_years+1}-{target_year}")
             continue
-        
+        elif debug:  # Add this new condition
+            print(f"  ✓ {ticker}: Has {min_dividend_years}+ years dividend history")
+    
         # Check dividend yield
         div_yield = get_dividend_yield_for_year(stock, target_year)
         if div_yield is None:
-            if verbose:
-                print(f"  {ticker}: Could not calculate dividend yield for {target_year}")
+            if verbose or debug:  # Change this line to include debug
+                print(f"  ❌ {ticker}: Could not calculate dividend yield for {target_year}")
             continue
         elif div_yield < dividend_yield:
-            if verbose:
-                print(f"  {ticker}: Dividend yield {div_yield:.2f}% < {dividend_yield}% requirement")
+            if verbose or debug:  # Change this line to include debug
+                print(f"  ❌ {ticker}: Dividend yield {div_yield:.2f}% < {dividend_yield}% requirement")
             continue
-        
+        elif debug:  # Add this new condition
+            print(f"  ✓ {ticker}: Dividend yield {div_yield:.2f}% meets {dividend_yield}% requirement")
+    
         # Company qualifies!
         qualified_companies.append({
             'Ticker': ticker,
             metric_name: ratio,
-            'Div Years': min_dividend_years,  # Change from 'Consecutive Dividend Years' to match usage
+            'Div Years': min_dividend_years,
             'Dividend Yield (%)': div_yield,
             'stock_obj': stock
         })
         
-        if verbose:
+        if verbose or debug:  # Change this line to include debug
             print(f"  ✓ {ticker}: QUALIFIED ({metric_name}: {ratio:.2f}, Yield: {div_yield:.2f}%)")
         
         # Stop when we have the requested count
@@ -1564,7 +1589,7 @@ SEC EDGAR data provides the most reliable fundamental data but requires processi
 - Mapping ticker symbols to CIK identifiers
 
 TECHNICAL NOTES:
-• Supports analysis from 2009 onwards (requires 2+ years of historical data)
+• Supports historical analysis (requires 2+ years of data for performance tracking)
 • Implements rate limiting to respect API usage guidelines  
 • Handles corporate actions, splits, and data quality issues automatically
 • Results include detailed performance attribution and statistical summaries
@@ -1586,15 +1611,22 @@ For implementation details and calculation methodologies, see the script header 
                         help="Enable detailed progress output showing individual ticker processing and ratios")
     parser.add_argument("--debug", action="store_true", 
                     help="Enable debug mode showing P/B calculation details for every ticker (very verbose)")
+    parser.add_argument("--force", action="store_true", 
+                    help="Force execution even with less than 2 years of subsequent data available (useful for recent years)")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {__version__}")
     
     args = parser.parse_args()
     
     # Validate year
     current_year = datetime.now().year
-    if args.year < 2009 or args.year > current_year - 2:
-        print(f"Error: Year must be between 2009 and {current_year - 2}")
-        print("(Need at least 2 years of historical data)")
+    if not args.force and args.year > current_year - 2:
+        print(f"Error: Year must be {current_year - 2} or earlier")
+        print("(Need at least 2 years of historical data for subsequent performance tracking)")
+        print(f"Use --force to override this requirement and analyze {args.year} anyway")
+        exit(1)
+    elif args.force and args.year > current_year - 1:
+        print(f"Error: Year must be {current_year - 1} or earlier (even with --force)")
+        print("(Cannot analyze the current year)")
         exit(1)
     
     # Validate other parameters
@@ -1610,5 +1642,10 @@ For implementation details and calculation methodologies, see the script header 
         print("Error: Minimum dividend years must be a positive integer")
         exit(1)
     
+    if args.force and args.year > current_year - 2:
+        print(f"\n⚠️  WARNING: Using --force to analyze {args.year} with limited subsequent data")
+        print(f"   Performance tracking for {args.year + 1} may be incomplete or unavailable")
+        print(f"   Results should be interpreted with caution\n")
+
     main(args.year, count=args.count, metric=args.metric, dividend_yield=args.dividend_yield, 
          min_dividend_years=args.min_dividend_years, verbose=args.verbose, debug=args.debug)
