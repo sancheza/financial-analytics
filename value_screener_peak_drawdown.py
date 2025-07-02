@@ -25,7 +25,7 @@ import wcwidth
 import warnings
 from io import StringIO
 
-__version__ = "1.03"
+__version__ = "1.04"
 
 # --- Utility Functions ---
 
@@ -108,7 +108,6 @@ def get_sp500_tickers_for_year(target_year):
     return get_constituents_from_cache(target_year)
 
 def print_pretty_results_table(results, percent, years, marketcap_str):
-    """Pretty print the results table, inspired by value_price_screener.py."""
     import os
 
     class Colors:
@@ -120,6 +119,7 @@ def print_pretty_results_table(results, percent, years, marketcap_str):
         FAIL = ''
         ENDC = ''
         BOLD = ''
+        ORANGE = ''
 
     # Disable colors if not a TTY
     use_colors = sys.stdout.isatty() and os.environ.get("TERM") not in (None, "dumb")
@@ -132,6 +132,7 @@ def print_pretty_results_table(results, percent, years, marketcap_str):
         Colors.FAIL = '\033[91m'
         Colors.ENDC = '\033[0m'
         Colors.BOLD = '\033[1m'
+        Colors.ORANGE = '\033[38;5;208m'  # True orange for most terminals
 
     def colorize(text, color_code):
         return f"{color_code}{text}{Colors.ENDC}" if use_colors and color_code else text
@@ -173,15 +174,27 @@ def print_pretty_results_table(results, percent, years, marketcap_str):
           "─" * col_widths[3] + "┼" + "─" * col_widths[4] + "┼" + "─" * col_widths[5] + "┤")
 
     for row in results:
-        ticker = colorize(str(row['Ticker']), Colors.BOLD + (Colors.FAIL if row['% Down'] < -80 else Colors.OKGREEN))
-        down_str = f"{row['% Down']:.1f}%"
-        down_col = Colors.FAIL if row['% Down'] < -80 else Colors.WARNING if row['% Down'] < -70 else Colors.OKGREEN
+        pct_down = row['% Down']
+        down_str = f"{pct_down:.1f}%"
+        # Color logic for both ticker and % down
+        if pct_down <= -80:
+            color = Colors.FAIL
+        elif pct_down <= -70:
+            color = Colors.ORANGE
+        elif pct_down <= -60:
+            color = Colors.WARNING
+        else:
+            color = Colors.OKGREEN
+
+        ticker = colorize(str(row['Ticker']), Colors.BOLD + color)
+        down_colored = colorize(down_str, color)
+
         print("│" +
               pad_text(ticker, col_widths[0]) + "│" +
               pad_text(f"${row['Peak Price']:.2f}", col_widths[1]) + "│" +
               pad_text(row['Peak Date'], col_widths[2]) + "│" +
               pad_text(f"${row['Current Price']:.2f}", col_widths[3]) + "│" +
-              pad_text(colorize(down_str, down_col), col_widths[4]) + "│" +
+              pad_text(down_colored, col_widths[4]) + "│" +
               pad_text(row['Market Cap'], col_widths[5]) + "│")
     print("└" + "─" * col_widths[0] + "┴" + "─" * col_widths[1] + "┴" + "─" * col_widths[2] + "┴" +
           "─" * col_widths[3] + "┴" + "─" * col_widths[4] + "┴" + "─" * col_widths[5] + "┘")
