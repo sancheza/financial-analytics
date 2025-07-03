@@ -25,7 +25,7 @@ import wcwidth
 import warnings
 from io import StringIO
 
-__version__ = "1.04"
+__version__ = "1.05"
 
 # --- Utility Functions ---
 
@@ -107,7 +107,7 @@ def get_sp500_tickers_for_year(target_year):
         download_and_cache_data()
     return get_constituents_from_cache(target_year)
 
-def print_pretty_results_table(results, percent, years, marketcap_str):
+def print_pretty_results_table(results, percent, years, marketcap_str, index):
     import os
 
     class Colors:
@@ -128,7 +128,7 @@ def print_pretty_results_table(results, percent, years, marketcap_str):
         Colors.OKBLUE = '\033[94m'
         Colors.OKCYAN = '\033[96m'
         Colors.OKGREEN = '\033[92m'
-        Colors.WARNING = '\033[93m'
+        Colors.WARNING = '\033[38;5;136m'  # Dark yellow/gold - much more readable
         Colors.FAIL = '\033[91m'
         Colors.ENDC = '\033[0m'
         Colors.BOLD = '\033[1m'
@@ -159,19 +159,21 @@ def print_pretty_results_table(results, percent, years, marketcap_str):
         print(colorize("\n❌ No stocks met the criteria.", Colors.FAIL))
         return
 
-    headers = ["Ticker", "Peak Price", "Peak Date", "Current Price", "% Down", "Market Cap"]
-    col_widths = [8, 12, 13, 14, 9, 14]
+    headers = ["Ticker", "Peak Price", "Peak Date", "Trough Price", "Trough Date", "Current Price", "% Down", "Market Cap"]
+    col_widths = [8, 11, 12, 12, 12, 13, 9, 12]
     table_width = sum(col_widths) + len(col_widths) + 1
     header_width = table_width - 2
 
-    title = f"S&P 500 Stocks Down {percent}%+ From {years}Y Peak (Cap ≥ {marketcap_str})"
+    title = f"{index} Stocks Down {percent}%+ From {years}Y Peak (Cap ≥ {marketcap_str})"
     print("\n" + "┌" + "─" * header_width + "┐")
     print("│" + title.center(header_width) + "│")
     print("├" + "─" * col_widths[0] + "┬" + "─" * col_widths[1] + "┬" + "─" * col_widths[2] + "┬" +
-          "─" * col_widths[3] + "┬" + "─" * col_widths[4] + "┬" + "─" * col_widths[5] + "┤")
+          "─" * col_widths[3] + "┬" + "─" * col_widths[4] + "┬" + "─" * col_widths[5] + "┬" +
+          "─" * col_widths[6] + "┬" + "─" * col_widths[7] + "┤")
     print("│" + "".join([pad_text(h, w) + "│" for h, w in zip(headers, col_widths)]))
     print("├" + "─" * col_widths[0] + "┼" + "─" * col_widths[1] + "┼" + "─" * col_widths[2] + "┼" +
-          "─" * col_widths[3] + "┼" + "─" * col_widths[4] + "┼" + "─" * col_widths[5] + "┤")
+          "─" * col_widths[3] + "┼" + "─" * col_widths[4] + "┼" + "─" * col_widths[5] + "┼" +
+          "─" * col_widths[6] + "┼" + "─" * col_widths[7] + "┤")
 
     for row in results:
         pct_down = row['% Down']
@@ -193,25 +195,93 @@ def print_pretty_results_table(results, percent, years, marketcap_str):
               pad_text(ticker, col_widths[0]) + "│" +
               pad_text(f"${row['Peak Price']:.2f}", col_widths[1]) + "│" +
               pad_text(row['Peak Date'], col_widths[2]) + "│" +
-              pad_text(f"${row['Current Price']:.2f}", col_widths[3]) + "│" +
-              pad_text(down_colored, col_widths[4]) + "│" +
-              pad_text(row['Market Cap'], col_widths[5]) + "│")
+              pad_text(f"${row['Trough Price']:.2f}", col_widths[3]) + "│" +
+              pad_text(row['Trough Date'], col_widths[4]) + "│" +
+              pad_text(f"${row['Current Price']:.2f}", col_widths[5]) + "│" +
+              pad_text(down_colored, col_widths[6]) + "│" +
+              pad_text(row['Market Cap'], col_widths[7]) + "│")
     print("└" + "─" * col_widths[0] + "┴" + "─" * col_widths[1] + "┴" + "─" * col_widths[2] + "┴" +
-          "─" * col_widths[3] + "┴" + "─" * col_widths[4] + "┴" + "─" * col_widths[5] + "┘")
+          "─" * col_widths[3] + "┴" + "─" * col_widths[4] + "┴" + "─" * col_widths[5] + "┴" +
+          "─" * col_widths[6] + "┴" + "─" * col_widths[7] + "┘")
+
+def get_index_tickers_from_url(url, ticker_col="Ticker"):
+    """Download tickers from a CSV URL with a specified ticker column. Handles iShares ETF CSVs with header rows."""
+    import io
+    import requests
+
+    try:
+        # Download the CSV as text
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        lines = resp.text.splitlines()
+
+        # Find the header row (the one containing the ticker column)
+        header_idx = None
+        for i, line in enumerate(lines):
+            if ticker_col in line.split(','):
+                header_idx = i
+                break
+        if header_idx is None:
+            raise ValueError(f"Could not find header row with column '{ticker_col}' in CSV.")
+
+        # Read the CSV from the header row onward
+        csv_data = "\n".join(lines[header_idx:])
+        df = pd.read_csv(io.StringIO(csv_data))
+        if ticker_col not in df.columns:
+            # Try common alternatives
+            for alt in ["Ticker", "Ticker Symbol", "Symbol"]:
+                if alt in df.columns:
+                    ticker_col = alt
+                    break
+        tickers = df[ticker_col].dropna().astype(str).str.upper().unique()
+        # Filter out empty/whitespace tickers AND invalid ticker symbols
+        tickers = [t for t in tickers if t and t.strip() and t != '-' and re.match(r'^[A-Z0-9.-]+$', t)]
+        return sorted(tickers)
+    except Exception as e:
+        print(f"❌ Error fetching tickers from {url}: {e}")
+        return []
+
+def get_index_tickers(index, target_year=None):
+    """Return tickers for the selected index."""
+    index = index.upper()
+    if index == "SP500":
+        return get_sp500_tickers_for_year(target_year or datetime.now().year)
+    elif index == "SP400":
+        return get_index_tickers_from_url("https://datahub.io/core/s-and-p-400-companies/r/constituents.csv")
+    elif index == "SP600":
+        return get_index_tickers_from_url("https://datahub.io/core/s-and-p-600-companies/r/constituents.csv")
+    elif index == "NASDAQ100":
+        return get_index_tickers_from_url("https://datahub.io/core/nasdaq-100-companies/r/constituents.csv")
+    elif index == "DOW30":
+        return get_index_tickers_from_url("https://datahub.io/core/dow-jones-30/r/constituents.csv")
+    elif index == "RUSSELL1000":
+        # iShares Russell 1000 ETF holdings CSV (direct download link)
+        return get_index_tickers_from_url(
+            "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/1467271812596.ajax?fileType=csv&fileName=IWB_holdings&dataType=fund",
+            ticker_col="Ticker"
+        )
+    elif index == "RUSSELL2000":
+        print("❌ Russell 2000 constituent CSV is not available from the current source.")
+        return []
+    elif index == "ALL":
+        print("⚠️  'ALL' index is not implemented for performance reasons.")
+        return []
+    else:
+        raise ValueError(f"Unknown index: {index}")
 
 # --- Main Logic ---
 
-def main(percent, years, marketcap_str, forceupdate, verbose=False):
+def main(percent, years, marketcap_str, forceupdate, verbose=False, index="SP500"):
     percent = float(percent)
     years = int(years)
     min_marketcap = parse_marketcap(marketcap_str)
     cache_dir = Path("./data/json")
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_file = cache_dir / "sp500_history_cache.json"
+    cache_file = cache_dir / f"{index.lower()}_history_cache.json"
 
-    # Use current S&P 500 tickers, not historical
-    tickers = get_sp500_tickers_for_year(datetime.now().year)
-    tickers.sort()
+    # Use selected index tickers
+    tickers = get_index_tickers(index, datetime.now().year)
+    tickers = sorted(set(tickers))
 
     # Load or build cache
     cache = {}
@@ -229,19 +299,64 @@ def main(percent, years, marketcap_str, forceupdate, verbose=False):
 
     for idx, ticker in enumerate(tickers, 1):
         try:
-            if ticker not in cache or forceupdate:
+            # Check if we need to refresh cache for this ticker
+            needs_refresh = (
+                ticker not in cache or 
+                forceupdate or
+                cache[ticker].get("cached_years", 0) < years or  # Need more years of data
+                "cached_years" not in cache[ticker]  # Old cache format without metadata
+            )
+            
+            if needs_refresh:
                 stock = yf.Ticker(ticker)
                 start = (datetime.now() - timedelta(days=years*365)).strftime("%Y-%m-%d")
                 end = datetime.now().strftime("%Y-%m-%d")
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    hist = stock.history(start=start, end=end, auto_adjust=True)
-                if hist.empty or 'Close' not in hist:
-                    skipped += 1
-                    skipped_tickers.append(ticker)
-                    if verbose:
-                        print(f"[{ticker}] Skipped: No price data found.")
-                    continue
+                    # Suppress yfinance output for failed tickers
+                    import sys
+                    import os
+                    from contextlib import redirect_stderr, redirect_stdout
+                    with redirect_stdout(open(os.devnull, 'w')), redirect_stderr(open(os.devnull, 'w')):
+                        hist = stock.history(start=start, end=end, auto_adjust=True)
+                #if verbose:
+                    #print(f"hist.empty: {hist.empty}, 'Close' in hist: {'Close' in hist}, hist['Close'].dropna().empty: {hist['Close'].dropna().empty if 'Close' in hist else 'N/A'}")
+                if hist.empty or 'Close' not in hist or hist['Close'].dropna().empty:
+                    # Try dash-format if ticker ends with a single letter and is not already dash-formatted
+                    if len(ticker) >= 3 and ticker[-1].isalpha() and '-' not in ticker:
+                        alt_ticker = ticker[:-1] + '-' + ticker[-1]
+                        if verbose:
+                            print(f"Trying dash-format fallback: {ticker} -> {alt_ticker}")
+                        stock_alt = yf.Ticker(alt_ticker)
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            # Suppress yfinance output completely
+                            import sys
+                            import os
+                            from contextlib import redirect_stderr, redirect_stdout
+                            with redirect_stdout(open(os.devnull, 'w')), redirect_stderr(open(os.devnull, 'w')):
+                                hist_alt = stock_alt.history(start=start, end=end, auto_adjust=True)
+                        if not hist_alt.empty and 'Close' in hist_alt and not hist_alt['Close'].dropna().empty:
+                            # Success with alt_ticker - use it for data but keep original ticker for cache key
+                            hist = hist_alt
+                            stock = stock_alt  # Update stock object for info lookup
+                            ticker = alt_ticker  # Update ticker to use dash format
+                            if not verbose:
+                                print(f"[{ticker}] Found using dash format")
+                            elif verbose:
+                                print(f"[{ticker}] Successfully found data using {alt_ticker}")
+                        else:
+                            skipped += 1
+                            skipped_tickers.append(ticker)
+                            if verbose:
+                                print(f"[{ticker}] Skipped: No price data found (tried {alt_ticker} as well).")
+                            continue
+                    else:
+                        skipped += 1
+                        skipped_tickers.append(ticker)
+                        if verbose:
+                            print(f"[{ticker}] Skipped: No price data found.")
+                        continue
                 # Check for sufficient history
                 if (hist.index[-1] - hist.index[0]).days < min_days:
                     insufficient_history += 1
@@ -253,6 +368,10 @@ def main(percent, years, marketcap_str, forceupdate, verbose=False):
                 peak_row = hist['Close'].idxmax()
                 peak_price = float(hist['Close'].max())
                 peak_date = str(peak_row.date())
+                # Add trough calculation
+                trough_row = hist['Close'].idxmin()
+                trough_price = float(hist['Close'].min())
+                trough_date = str(trough_row.date())
                 current_price = float(hist['Close'].iloc[-1])
                 info = stock.info
                 mcap = info.get('marketCap', 0)
@@ -267,16 +386,22 @@ def main(percent, years, marketcap_str, forceupdate, verbose=False):
                 cache[ticker] = {
                     "peak_price": peak_price,
                     "peak_date": peak_date,
+                    "trough_price": trough_price,
+                    "trough_date": trough_date,
                     "current_price": current_price,
                     "marketcap": mcap,
                     "marketcap_disp": mcap_disp,
                     "history_start": str(hist.index[0].date()),
-                    "history_end": str(hist.index[-1].date())
+                    "history_end": str(hist.index[-1].date()),
+                    "cached_years": years,  # Store the years parameter used
+                    "cache_date": datetime.now().isoformat()  # Store when cached
                 }
                 time.sleep(0.7)
             else:
                 peak_price = cache[ticker]["peak_price"]
                 peak_date = cache[ticker]["peak_date"]
+                trough_price = cache[ticker]["trough_price"]
+                trough_date = cache[ticker]["trough_date"]
                 current_price = cache[ticker]["current_price"]
                 mcap = cache[ticker]["marketcap"]
                 mcap_disp = cache[ticker]["marketcap_disp"]
@@ -304,6 +429,8 @@ def main(percent, years, marketcap_str, forceupdate, verbose=False):
                     "Ticker": ticker,
                     "Peak Price": peak_price,
                     "Peak Date": peak_date,
+                    "Trough Price": trough_price,
+                    "Trough Date": trough_date,
                     "Current Price": current_price,
                     "% Down": pct_down,
                     "Market Cap": mcap_disp
@@ -318,14 +445,14 @@ def main(percent, years, marketcap_str, forceupdate, verbose=False):
             if verbose:
                 print(f"[{ticker}] Skipped: Exception: {e}")
             continue
-        if idx % 10 == 0 or idx == total:
-            print(f"\rProcessed {idx}/{total} tickers... Skipped: {skipped}  Insufficient history: {insufficient_history}", end="", flush=True)
+        if idx % 50 == 0 or idx == total:
+            print(f"\033[94mProcessed {idx}/{total} tickers... Skipped: {skipped}  Insufficient history: {insufficient_history}\033[0m")
     print()
     with open(cache_file, "w") as f:
         json.dump(cache, f, indent=2)
 
     results.sort(key=lambda x: x["% Down"])
-    print_pretty_results_table(results, percent, years, marketcap_str)
+    print_pretty_results_table(results, percent, years, marketcap_str, index)
     print(f"\nSkipped {skipped} tickers due to missing or delisted data.")
     if skipped_tickers:
         print("  Skipped tickers:", ", ".join(skipped_tickers))
@@ -361,6 +488,8 @@ Example usage:
     parser.add_argument("--marketcap", type=str, default="10B", help="Minimum market cap (e.g. 10B, 500M, 1T; default: 10B)")
     parser.add_argument("--forceupdate", action="store_true", help="Force update cache from yfinance")
     parser.add_argument("--verbose", action="store_true", help="Show progress and metrics for each ticker")
+    parser.add_argument("--index", type=str, default="SP500",
+                        help="Index to screen: SP500, SP400, SP600, NASDAQ100, DOW30 (default: SP500)")
     parser.add_argument("-v", "--version", action="store_true", help="Show script version and exit")
     args = parser.parse_args()
 
@@ -368,4 +497,4 @@ Example usage:
         print(f"S&P 500 Peak Drawdown Screener version {__version__}")
         sys.exit(0)
 
-    main(args.percent, args.years, args.marketcap, args.forceupdate, verbose=args.verbose)
+    main(args.percent, args.years, args.marketcap, args.forceupdate, verbose=args.verbose, index=args.index)
