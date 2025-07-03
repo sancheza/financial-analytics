@@ -120,6 +120,7 @@ def print_pretty_results_table(results, percent, years, marketcap_str, index):
         ENDC = ''
         BOLD = ''
         ORANGE = ''
+        DARKGREY = ''
 
     # Disable colors if not a TTY
     use_colors = sys.stdout.isatty() and os.environ.get("TERM") not in (None, "dumb")
@@ -133,6 +134,7 @@ def print_pretty_results_table(results, percent, years, marketcap_str, index):
         Colors.ENDC = '\033[0m'
         Colors.BOLD = '\033[1m'
         Colors.ORANGE = '\033[38;5;208m'  # True orange for most terminals
+        Colors.DARKGREY = '\033[90m'  # Dark grey
 
     def colorize(text, color_code):
         return f"{color_code}{text}{Colors.ENDC}" if use_colors and color_code else text
@@ -185,11 +187,23 @@ def print_pretty_results_table(results, percent, years, marketcap_str, index):
             color = Colors.ORANGE
         elif pct_down <= -60:
             color = Colors.WARNING
+        elif pct_down <= -50:
+            color = Colors.OKBLUE  # Blue for 50-60% range
         else:
-            color = Colors.OKGREEN
+            color = Colors.DARKGREY  # Dark grey for <50% down
 
         ticker = colorize(str(row['Ticker']), Colors.BOLD + color)
         down_colored = colorize(down_str, color)
+        
+        # Check if current price is within 10% of trough price
+        current_price = row['Current Price']
+        trough_price = row['Trough Price']
+        pct_from_trough = ((current_price - trough_price) / trough_price) * 100
+        
+        if pct_from_trough <= 10:
+            current_price_colored = colorize(f"${current_price:.2f}", Colors.OKGREEN)
+        else:
+            current_price_colored = f"${current_price:.2f}"
 
         print("│" +
               pad_text(ticker, col_widths[0]) + "│" +
@@ -197,7 +211,7 @@ def print_pretty_results_table(results, percent, years, marketcap_str, index):
               pad_text(row['Peak Date'], col_widths[2]) + "│" +
               pad_text(f"${row['Trough Price']:.2f}", col_widths[3]) + "│" +
               pad_text(row['Trough Date'], col_widths[4]) + "│" +
-              pad_text(f"${row['Current Price']:.2f}", col_widths[5]) + "│" +
+              pad_text(current_price_colored, col_widths[5]) + "│" +
               pad_text(down_colored, col_widths[6]) + "│" +
               pad_text(row['Market Cap'], col_widths[7]) + "│")
     print("└" + "─" * col_widths[0] + "┴" + "─" * col_widths[1] + "┴" + "─" * col_widths[2] + "┴" +
