@@ -14,7 +14,7 @@ def get_dividend(ticker):
     soup = BeautifulSoup(r.text, "html.parser")
 
     # Find all list items that might contain the Forward Dividend Yield value
-    for li in soup.find_all("li", class_="yf-1jj98ts"):
+    for li in soup.find_all("li", class_="yf-1hwifs8"):
         label = li.find("span", class_="label")
         value = li.find("span", class_="value")
         if label and value and "Forward Dividend & Yield" in label.text:
