@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-__version__ = '1.0.5'
+__version__ = '1.0.6'
 
 import yfinance as yf
 import pandas as pd
@@ -31,7 +31,7 @@ SETTINGS = {
     'ROIC_MIN': 10,               # Default: 10%
     'DIVIDEND_HISTORY_YEARS': 5,  # Default: 10
     'EARNINGS_GROWTH_MIN': 5,     # Default: 33%
-    'REQUEST_DELAY': 2,           # Delay between API requests in seconds
+    'REQUEST_DELAY': 5,           # Delay between API requests in seconds
     'DATA_MAX_AGE_DAYS': 7,        # Maximum age of data before requiring refresh
     'ALPHA_VANTAGE_KEY': os.environ.get('ALPHA_VANTAGE_KEY', '')  # Get API key from environment variable
 }
@@ -1379,26 +1379,47 @@ Formula: ((Ending EPS / Beginning EPS) ^ (1/years) - 1) × 100%
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Value Stock Screener - Screen stocks using Graham value investing principles',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='''
-Examples:
-  python value_screener.py                            # Screen all stocks using cached data if available
-  python value_screener.py --test 10                  # Screen only 10 stocks (for testing)
-  python value_screener.py --forceupdate              # Force refresh of all stock data
-  python value_screener.py --verbosity 1              # Show summary for each stock
-  python value_screener.py --verbosity 2              # Show detailed criteria for each stock
-  python value_screener.py --checkcriteria            # Analyze which criteria are most often met
-  python value_screener.py --showcriteria             # Show detailed explanation of each criterion
-
-Note:
-  This script requires an Alpha Vantage API key to retrieve financial data.
-  Please create a .env file in the project root with your API key:
-  
-  ALPHA_VANTAGE_KEY=your_api_key_here
-  
-  Or set it as an environment variable before running the script.
-'''
+        description=(
+            "Value Stock Screener\n"
+            "\n"
+            "Overview:\n"
+            "  This script screens stocks using value investing principles. "
+            "It analyzes financial data from Alpha Vantage, SEC EDGAR, and Yahoo Finance to identify stocks "
+            "that may be undervalued and that meet value criteria for safety, profitability, and growth.\n"
+            "\n"
+            "Performance & Efficiency:\n"
+            "  For speed and reliability, the script uses locally-cached financial data whenever available. "
+            "If valid cached data exists, it is loaded and used for screening, greatly reducing the need for repeated API calls, "
+            "minimizing network delays, and avoiding rate limits. If cached data is missing or outdated, fresh data is fetched automatically.\n"
+            "\n"
+            "Scope:\n"
+            "  By default, the script evaluates all S&P 500 tickers (NYSE and NASDAQ) as listed on Wikipedia. "
+            "You can customize the universe by editing the code or cached data.\n"
+            "\n"
+            "Objectives:\n"
+            "  - Identify stocks that meet all Graham value criteria (P/E, P/B, FCF yield, ROIC, etc.)\n"
+            "  - Provide detailed explanations and statistics for each criterion\n"
+            "  - Support cache-based and live screening for S&P 500 and custom tickers\n"
+            "  - Save results in CSV and JSON formats for further analysis\n"
+            "\n"
+            "Usage:\n"
+            "  python value_screener.py                            # Screen all S&P 500 stocks using cached data if available\n"
+            "  python value_screener.py --test 10                  # Screen only 10 stocks (for testing)\n"
+            "  python value_screener.py --forceupdate              # Force refresh of all stock data (ignore cache)\n"
+            "  python value_screener.py --verbosity 1              # Show summary for each stock\n"
+            "  python value_screener.py --verbosity 2              # Show detailed criteria for each stock\n"
+            "  python value_screener.py --checkcriteria            # Analyze which criteria are most often met\n"
+            "  python value_screener.py --showcriteria             # Display detailed explanation of each criterion\n"
+            "\n"
+            "Requirements:\n"
+            "  - Alpha Vantage API key (set in .env or environment variable)\n"
+            "  - Internet connection for live screening\n"
+            "\n"
+            "To set your API key, create a .env file in the project root with:\n"
+            "  ALPHA_VANTAGE_KEY=your_api_key_here\n"
+            "Or set it as an environment variable before running the script.\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument('--output', type=str, default='screener_results.csv',
                       help='Output file path for results (CSV format, default: screener_results.csv)')
