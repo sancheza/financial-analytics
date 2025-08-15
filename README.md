@@ -45,7 +45,7 @@ $env:ALPHA_VANTAGE_KEY="your_api_key_here"
 - **Financial Modeling Prep (FMP)**: Required for `getBookValueFMP`. Get a free key at [FMP](https://financialmodelingprep.com).
 
 
-### get_dividend.py
+### get_dividend
 This script retrieves the Forward Dividend Yield for a given stock ticker from Yahoo Finance. It can be run from the terminal or called by a Libre Office macro to populate relevant cells.
 
 ### getBookValueFMP
@@ -62,7 +62,7 @@ The function will populate the cell in which it is called as well as the two to 
 
 ```Dependencies: Google Sheets, Financial Modeling Prep (FMP) free API key```[(get it here)](https://financialmodelingprep.com)
 
-![](https://github.com/sancheza/Finance-scripts/blob/main/getBookValueFMP-demo.gif)
+![](https://github.com/sancheza/Finance-scripts/blob/main/assets/getBookValueFMP-demo.gif)
 
 
 ### get-dividends
@@ -71,7 +71,7 @@ This script obtains dividend yield for a list of stocks defined in ticker.txt an
 
 ```Dependencies: Python 3, yfinance module```
 
-![](https://github.com/sancheza/Finance-scripts/blob/main/get-dividends-demo.gif)
+![](https://github.com/sancheza/Finance-scripts/blob/main/assets/get-dividends-demo.gif)
 
 ### value_price_screener
 This tool performs value analytics by identifying historically undervalued dividend-paying companies from the S&P 500 and measuring their performance in the year following the target year. It enables rigorous backtesting of value investing principles using accurate historical data.
