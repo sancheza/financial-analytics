@@ -44,7 +44,11 @@ $env:ALPHA_VANTAGE_KEY="your_api_key_here"
 - **Alpha Vantage**: Required for `value_screener.py` and `test_alpha_vantage.py`. Get a free key at [Alpha Vantage](https://www.alphavantage.co/support/#api-key).
 - **Financial Modeling Prep (FMP)**: Required for `getBookValueFMP`. Get a free key at [FMP](https://financialmodelingprep.com).
 
-### getBookValue
+
+### get_dividend.py
+This script retrieves the Forward Dividend Yield for a given stock ticker from Yahoo Finance. It can be run from the terminal or called by a Libre Office macro to populate relevant cells.
+
+### getBookValueFMP
 
 This is a Google Sheets function that populates book value in a worksheet for a set of tickers.
 
@@ -69,5 +73,13 @@ This script obtains dividend yield for a list of stocks defined in ticker.txt an
 
 ![](https://github.com/sancheza/Finance-scripts/blob/main/get-dividends-demo.gif)
 
+### value_price_screener
+This tool performs value analytics by identifying historically undervalued dividend-paying companies from the S&P 500 and measuring their performance in the year following the target year. It enables rigorous backtesting of value investing principles using accurate historical data.
 
+### value_screener
+This script screens stocks using value investing principles. It analyzes financial data from Alpha Vantage, SEC EDGAR, and Yahoo Finance to identify stocks that may be undervalued and that meet value criteria for safety, profitability, and growth.
 
+By default, the script evaluates all S&P 500 tickers (NYSE and NASDAQ) as listed on Wikipedia. You can customize the universe by editing the code or cached data.
+
+### value_screener_peak_drawdown
+This script analyzes the current S&P 500 constituents and identifies stocks that are down a specified percentage or more from their peak price over the past N years, with an optional minimum market capitalization filter.
