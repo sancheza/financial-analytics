@@ -19,6 +19,7 @@ env/
 .vscode/
 *.swp
 *.swo
+*.code-workspace
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -29,6 +30,7 @@ env/
 
 # Logs
 *.log
+log.txt
 
 # macOS specific
 .DS_Store
@@ -41,3 +43,6 @@ env/
 tmp/
 temp/
 *.tmp
+
+# Temporary shell scripts
+*.sh
