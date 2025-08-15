@@ -45,6 +45,8 @@ $env:ALPHA_VANTAGE_KEY="your_api_key_here"
 - **Financial Modeling Prep (FMP)**: Required for `getBookValueFMP`. Get a free key at [FMP](https://financialmodelingprep.com).
 
 
+## The Tools
+
 ### getBookValueFMP
 
 This is a Google Sheets function that populates book value in a worksheet for a set of tickers.
@@ -76,6 +78,8 @@ This tool performs value analytics by identifying historically undervalued divid
 This script screens stocks using value investing principles. It analyzes financial data from Alpha Vantage, SEC EDGAR, and Yahoo Finance to identify stocks that may be undervalued and that meet value criteria for safety, profitability, and growth.
 
 By default, the script evaluates all S&P 500 tickers (NYSE and NASDAQ) as listed on Wikipedia. You can customize the universe by editing the code or cached data.
+
+![](https://github.com/sancheza/Finance-scripts/blob/main/assets/value_screener_demo.gif)
 
 ### value_screener_peak_drawdown
 This script analyzes the current S&P 500 constituents and identifies stocks that are down a specified percentage or more from their peak price over the past N years, with an optional minimum market capitalization filter.
