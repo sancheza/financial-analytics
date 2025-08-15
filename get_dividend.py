@@ -4,7 +4,7 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 def get_dividend(ticker):
     url = f"https://finance.yahoo.com/quote/{ticker}"
@@ -35,17 +35,36 @@ def get_dividend(ticker):
     return ""
 
 def print_help():
-    help_text = """
-Usage: python get_dividend.py [OPTION] TICKER
+        help_text = """
+get_dividend.py - Fetch Forward Dividend Yield from Yahoo Finance
+
+Overview:
+    This script retrieves the Forward Dividend Yield for a given stock ticker from Yahoo Finance.
+    It is designed for fast, simple, and reliable extraction of dividend yield data for use in
+    screening, analysis, or automation workflows.
+
+Objectives:
+    - Fetch the Forward Dividend Yield for a specified stock ticker
+    - Output the yield value (as a percentage) or "N/A" if unavailable
+    - Provide a minimal, scriptable interface for integration with other tools
+
+Usage:
+    python get_dividend.py TICKER
+        Fetches the Forward Dividend Yield for the given ticker symbol.
 
 Options:
-  -h, --help      Show this help message and exit
-  -v, --version   Show the version of the script and exit
+    -h, --help      Show this help message and exit
+    -v, --version   Show the version of the script and exit
 
 Arguments:
-  TICKER          The stock ticker symbol to fetch the dividend information for
+    TICKER          The stock ticker symbol to fetch the dividend information for
+
+Examples:
+    python get_dividend.py AAPL
+    python get_dividend.py --help
+    python get_dividend.py --version
 """
-    print(help_text)
+        print(help_text)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
