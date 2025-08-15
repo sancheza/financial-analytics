@@ -38,7 +38,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO as IOStringIO
 import wcwidth  # Add this import at the top of your file
 
-__version__ = '1.0.5'
+__version__ = '1.0.6'
 
 # Default configuration values
 DEFAULT_COUNT = 20
@@ -1056,7 +1056,7 @@ ALTERNATIVE DATA SOURCES FOR BETTER RELIABILITY:
 Consider implementing fallback data sources for production use.
 """
 
-def print_pretty_results_table(results, metric_name, target_year, dividend_yield, min_dividend_years):
+def print_pretty_results_table(results, metric_name, target_year, dividend_yield, min_dividend_years, is_limited_data=False, current_date=None):
     """Print a beautifully formatted results table with colors and clean borders"""
     
     # ANSI color codes for terminal styling
@@ -1109,12 +1109,22 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
     # Create DataFrame for easier manipulation
     df = pd.DataFrame(results)
     
+    # Determine header text based on data type
+    if is_limited_data:
+        performance_text = f"{target_year+1} YTD PERFORMANCE (as of {current_date})"
+        gain_column_name = "YTD Gain (%)"
+        end_price_column = f"{target_year+1} Current ($)"
+    else:
+        performance_text = f"{target_year+1} PERFORMANCE"
+        gain_column_name = "YoY Gain (%)"
+        end_price_column = f"{target_year+1} End ($)"
+    
     # Beautiful header with clean spacing
-    title = f"{target_year+1} PERFORMANCE FOR TOP {len(results)} S&P 500 COMPANIES WITH LOWEST {metric_name} RATIOS IN {target_year}"
+    title = f"{performance_text} FOR TOP {len(results)} S&P 500 COMPANIES WITH LOWEST {metric_name} RATIOS IN {target_year}"
     subtitle = f"Meeting Dividend Quality Criteria (≥{dividend_yield}% yield, {min_dividend_years}+ years)"
     
-    # Define table structure with fixed widths
-    headers = ["Ticker", f"{metric_name}", "Div Years", "Div Yield (%)", f"{target_year+1} Start ($)", f"{target_year+1} End ($)", "YoY Gain (%)"]
+    # Define table structure with fixed widths - adjust based on column names
+    headers = ["Ticker", f"{metric_name}", "Div Years", "Div Yield (%)", f"{target_year+1} Start ($)", end_price_column.replace(f"{target_year+1} ", ""), gain_column_name]
     col_widths = [8, 8, 12, 15, 18, 16, 15]
     
     # Calculate total table width
@@ -1158,7 +1168,7 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
         print(f"{colorize('│', Colors.OKBLUE)}", end="")
         
         # Column 1: Ticker (conditional coloring based on performance)
-        gain = row['YoY Gain (%)']
+        gain = row[gain_column_name]
         if gain is not None and gain < 0:
             # Red ticker for negative performance
             ticker = colorize(str(row['Ticker']), Colors.BOLD + Colors.FAIL)
@@ -1193,8 +1203,8 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
         print(pad_text(start_str, col_widths[4]), end="")
         print(f"{colorize('│', Colors.OKBLUE)}", end="")
         
-        # Column 6: End price
-        end_price = row[f'{target_year + 1} End ($)']
+        # Column 6: End/Current price
+        end_price = row[end_price_column]
         if end_price is not None:
             end_str = f"${end_price:.2f}"
         else:
@@ -1202,8 +1212,8 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
         print(pad_text(end_str, col_widths[5]), end="")
         print(f"{colorize('│', Colors.OKBLUE)}", end="")
         
-        # Column 7: YoY Gain with color (no emoji for cleaner spacing)
-        gain = row['YoY Gain (%)']
+        # Column 7: YoY/YTD Gain with color
+        gain = row[gain_column_name]
         if gain is not None:
             if gain > 0:
                 gain_str = colorize(f"+{gain:.2f}%", Colors.BOLD + Colors.OKGREEN)
@@ -1224,11 +1234,12 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
     print(f"{colorize('┘', Colors.OKBLUE)}")
     
     # Summary statistics with enhanced formatting
-    valid_gains = [r['YoY Gain (%)'] for r in results if r['YoY Gain (%)'] is not None]
+    valid_gains = [r[gain_column_name] for r in results if r[gain_column_name] is not None]
     if valid_gains:
         avg_gain = sum(valid_gains) / len(valid_gains)
         
-        print(f"\n{colorize('📊 PERFORMANCE SUMMARY', Colors.BOLD + Colors.HEADER)}")
+        performance_label = "YTD PERFORMANCE" if is_limited_data else "PERFORMANCE"
+        print(f"\n{colorize(f'📊 {performance_label} SUMMARY', Colors.BOLD + Colors.HEADER)}")
         print(f"{colorize('─' * 50, Colors.OKBLUE)}")
         
         # Performance summary with colors
@@ -1237,7 +1248,8 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
         else:
             gain_color = Colors.FAIL
         
-        print(f"{colorize('Average Return:', Colors.BOLD)} {colorize(f'{avg_gain:+.2f}%', Colors.BOLD + gain_color)}")
+        return_label = "Average YTD Return:" if is_limited_data else "Average Return:"
+        print(f"{colorize(return_label, Colors.BOLD)} {colorize(f'{avg_gain:+.2f}%', Colors.BOLD + gain_color)}")
         print(f"{colorize('Companies with Data:', Colors.BOLD)} {colorize(f'{len(valid_gains)}/{len(results)}', Colors.OKCYAN)}")
         print(f"{colorize(f'{metric_name} Range:', Colors.BOLD)} {colorize(f'{results[0][metric_name]:.2f} - {results[-1][metric_name]:.2f}', Colors.OKCYAN)}")
         
@@ -1245,18 +1257,21 @@ def print_pretty_results_table(results, metric_name, target_year, dividend_yield
         positive_gains = [g for g in valid_gains if g > 0]
         negative_gains = [g for g in valid_gains if g <= 0]
         
-        print(f"\n{colorize('🎯 PERFORMANCE DISTRIBUTION', Colors.BOLD + Colors.HEADER)}")
+        distribution_label = "YTD PERFORMANCE DISTRIBUTION" if is_limited_data else "PERFORMANCE DISTRIBUTION"
+        print(f"\n{colorize(f'🎯 {distribution_label}', Colors.BOLD + Colors.HEADER)}")
         print(f"{colorize('─' * 50, Colors.OKBLUE)}")
         print(f"{colorize('Winners:', Colors.BOLD)} {colorize(f'{len(positive_gains)} companies', Colors.OKGREEN)} {colorize(f'({len(positive_gains)/len(valid_gains)*100:.1f}%)', Colors.OKGREEN)}")
         print(f"{colorize('Losers:', Colors.BOLD)} {colorize(f'{len(negative_gains)} companies', Colors.FAIL)} {colorize(f'({len(negative_gains)/len(valid_gains)*100:.1f}%)', Colors.FAIL)}")
         
         if positive_gains:
             best_gain = max(valid_gains)
-            print(f"{colorize('Best Performer:', Colors.BOLD)} {colorize(f'+{best_gain:.2f}%', Colors.BOLD + Colors.OKGREEN)}")
+            best_label = "Best YTD Performer:" if is_limited_data else "Best Performer:"
+            print(f"{colorize(best_label, Colors.BOLD)} {colorize(f'+{best_gain:.2f}%', Colors.BOLD + Colors.OKGREEN)}")
         
         if negative_gains:
             worst_gain = min(valid_gains)
-            print(f"{colorize('Worst Performer:', Colors.BOLD)} {colorize(f'{worst_gain:.2f}%', Colors.BOLD + Colors.FAIL)}")
+            worst_label = "Worst YTD Performer:" if is_limited_data else "Worst Performer:"
+            print(f"{colorize(worst_label, Colors.BOLD)} {colorize(f'{worst_gain:.2f}%', Colors.BOLD + Colors.FAIL)}")
 
 def print_progress_bar(current, total, prefix='Progress', suffix='Complete', length=50):
     """Print a progress bar with percentage"""
@@ -1267,7 +1282,7 @@ def print_progress_bar(current, total, prefix='Progress', suffix='Complete', len
     if current == total:
         print()  # New line when complete
 
-def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield=DEFAULT_DIVIDEND_YIELD, min_dividend_years=DEFAULT_MIN_DIVIDEND_YEARS, verbose=False, debug=False):
+def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield=DEFAULT_DIVIDEND_YIELD, min_dividend_years=DEFAULT_MIN_DIVIDEND_YEARS, verbose=False, debug=False, args=None):
     # Suppress yfinance logging to reduce noise
     import logging
     logging.getLogger('yfinance').setLevel(logging.CRITICAL)
@@ -1456,16 +1471,45 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
     # Step 3: Calculate next year performance and collect price data
     print(f"\n📈 Step 6: Calculating {target_year + 1} performance...")
     
+    # Check if we're in force mode with limited data
+    current_year = datetime.now().year
+    is_limited_data = args.force and target_year > current_year - 2
+    current_date = datetime.now().strftime("%Y-%m-%d")
+
+    if is_limited_data:
+        print(f"⚠️  Limited data mode: Using current price ({current_date}) for {target_year + 1} performance")
+
     for i, company in enumerate(qualified_companies):
         ticker = company['Ticker']
         stock = company['stock_obj']
         
         if verbose:
-            print(f"  Getting {target_year + 1} performance for {ticker}...")
+            if is_limited_data:
+                print(f"  Getting YTD performance for {ticker}...")
+            else:
+                print(f"  Getting {target_year + 1} performance for {ticker}...")
         
-        # Get start and end prices for the next year
+        # Get start price for the next year
         price_start = get_year_start_price(stock, target_year + 1)
-        price_end = get_year_end_price(stock, target_year + 1)
+        
+        # Get end price - either year-end or current price
+        if is_limited_data:
+            # Get current price instead of year-end price
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    # Get current price using 1d history
+                    current_hist = stock.history(period="1d", auto_adjust=True)
+                    if not current_hist.empty:
+                        price_end = current_hist['Close'].iloc[-1]
+                    else:
+                        # Fallback to info if history fails
+                        info = stock.info
+                        price_end = info.get('currentPrice') or info.get('regularMarketPrice')
+            except:
+                price_end = None
+        else:
+            price_end = get_year_end_price(stock, target_year + 1)
         
         # Calculate gain
         if price_start and price_end:
@@ -1483,21 +1527,31 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
     # Remove stock_obj before displaying
     results = []
     for company in qualified_companies:
+        # Determine column labels based on data availability
+        if is_limited_data:
+            end_price_label = f'{target_year + 1} Current ($)'
+            gain_label = 'YTD Gain (%)'
+        else:
+            end_price_label = f'{target_year + 1} End ($)'
+            gain_label = 'YoY Gain (%)'
+        
         results.append({
             'Ticker': company['Ticker'],
             metric_name: company[metric_name],
-            'Div Years': company['Div Years'],  # Now matches the field name set above
+            'Div Years': company['Div Years'],
             'Div Yield (%)': company['Dividend Yield (%)'],
             f'{target_year + 1} Start ($)': company[f'{target_year + 1} Start Price ($)'],
-            f'{target_year + 1} End ($)': company[f'{target_year + 1} End Price ($)'],
-            'YoY Gain (%)': company['YoY Gain (%)']
+            end_price_label: company[f'{target_year + 1} End Price ($)'],
+            gain_label: company['YoY Gain (%)']
         })
     
     # Display results with prettier formatting
-    print_pretty_results_table(results, metric_name, target_year, dividend_yield, min_dividend_years)
+    print_pretty_results_table(results, metric_name, target_year, dividend_yield, min_dividend_years, is_limited_data=is_limited_data, current_date=current_date if is_limited_data else None)
     
     # Summary statistics (now handled in the pretty table function)
-    valid_gains = [r['YoY Gain (%)'] for r in results if r['YoY Gain (%)'] is not None]
+    # Fix: Use the correct gain column name based on data availability
+    gain_column_name = 'YTD Gain (%)' if is_limited_data else 'YoY Gain (%)'
+    valid_gains = [r[gain_column_name] for r in results if r[gain_column_name] is not None]
     
     print(f"\n📋 Methodology Summary:")
     print("─" * 50)
@@ -1524,17 +1578,13 @@ def main(target_year, count=DEFAULT_COUNT, metric=DEFAULT_METRIC, dividend_yield
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="""
-S&P 500 Value Dividend Screener - Historical Analysis & Performance Tracking
+S&P 500 Value Dividend Screener - Measure YoY Performance of Undervalued Stocks
 
 OVERVIEW:
-This tool performs value analytics by identifying historically undervalued
-dividend-paying companies from the S&P 500 and measuring their subsequent performance. It enables
-rigorous backtesting of value investing principles using accurate historical data.
+This tool performs value analytics by identifying historically undervalued dividend-paying companies from the S&P 500 and measuring their performance in the year following the target year. It enables rigorous backtesting of value investing principles using accurate historical data.
 
 CORE HYPOTHESIS:
-Companies trading at low valuation multiples (P/E or P/B ratios) while maintaining consistent
-dividend payments often outperform the market in following years, providing both capital
-appreciation and income generation.
+Companies trading at low valuation multiples (P/E or P/B ratios) while maintaining consistent dividend payments often outperform the market in following years, providing both capital appreciation and income generation.
 
 METHODOLOGY:
 1. DATA SOURCING: Retrieves accurate S&P 500 membership for the target year (avoiding survivorship bias)
@@ -1648,4 +1698,4 @@ For implementation details and calculation methodologies, see the script header 
         print(f"   Results should be interpreted with caution\n")
 
     main(args.year, count=args.count, metric=args.metric, dividend_yield=args.dividend_yield, 
-         min_dividend_years=args.min_dividend_years, verbose=args.verbose, debug=args.debug)
+         min_dividend_years=args.min_dividend_years, verbose=args.verbose, debug=args.debug, args=args)
