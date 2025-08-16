@@ -83,3 +83,6 @@ By default, the script evaluates all S&P 500 tickers (NYSE and NASDAQ) as listed
 
 ### value_screener_peak_drawdown
 This script analyzes the current S&P 500 constituents and identifies stocks that are down a specified percentage or more from their peak price over the past N years, with an optional minimum market capitalization filter.
+
+![](https://github.com/sancheza/Finance-scripts/blob/main/assets/value_screener_peak_drawdown_demo.gif)
+
