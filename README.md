@@ -74,6 +74,8 @@ This script retrieves the Forward Dividend Yield for a given stock ticker from Y
 ### value_price_screener
 This tool performs value analytics by identifying historically undervalued dividend-paying companies from the S&P 500 and measuring their performance in the year following the target year. It enables rigorous backtesting of value investing principles using accurate historical data.
 
+![](https://github.com/sancheza/Finance-scripts/blob/main/assets/value_price_screener_demo.gif)
+
 ### value_screener
 This script screens stocks using value investing principles. It analyzes financial data from Alpha Vantage, SEC EDGAR, and Yahoo Finance to identify stocks that may be undervalued and that meet value criteria for safety, profitability, and growth.
 
