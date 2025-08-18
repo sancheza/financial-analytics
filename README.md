@@ -90,6 +90,13 @@ This script retrieves the Forward Dividend Yield for a given stock ticker from Y
 ### value_price_screener
 This tool performs value analytics by identifying historically undervalued dividend-paying companies from the S&P 500 and measuring their performance in the year following the target year. It enables rigorous backtesting of value investing principles using accurate historical data.
 
+> **Dependencies**
+> - Python 3.10 or later  
+> - yfinance  
+> - pandas  
+> - requests  
+> - wcwidth
+
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/value_price_screener_demo.gif)
 
 ### value_screener
@@ -97,10 +104,25 @@ This script screens stocks using value investing principles. It analyzes financi
 
 By default, the script evaluates all S&P 500 tickers (NYSE and NASDAQ) as listed on Wikipedia. You can customize the universe by editing the code or cached data.
 
+> **Dependencies**
+> - Python 3.10 or later  
+> - yfinance  
+> - pandas  
+> - pandas_datareader  
+> - ijson  
+> - requests  
+> - alpha_vantage
+
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/value_screener_demo.gif)
 
 ### value_screener_peak_drawdown
 This script analyzes the current S&P 500 constituents and identifies stocks that are down a specified percentage or more from their peak price over the past N years, with an optional minimum market capitalization filter.
+
+> **Dependencies**
+> - Python 3.10 or later  
+> - yfinance  
+> - pandas  
+> - wcwidth
 
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/value_screener_peak_drawdown_demo.gif)
 
