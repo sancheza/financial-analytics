@@ -70,7 +70,9 @@ You will need to update the function with your API key. You can obtain it at the
 The function will populate the cell in which it is called as well as the two to the right of it. See cells I2 through K2 in the demo below.
 
 
-```Dependencies: Google Sheets, Financial Modeling Prep (FMP) free API key```[(get it here)](https://financialmodelingprep.com)
+> **Dependencies**
+> - Google Sheets
+> - Financial Modeling Prep (FMP) free API key [(get it here)](https://financialmodelingprep.com)
 
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/getBookValueFMP-demo.gif)
 
@@ -78,7 +80,10 @@ The function will populate the cell in which it is called as well as the two to 
 ### get_dividend
 This script retrieves the Forward Dividend Yield for a given stock ticker from Yahoo Finance. It can be run from the terminal or called by a Libre Office macro to populate relevant cells.
 
-```Dependencies: Python 3, requests, BeautifulSoup```
+> **Dependencies**
+> - Python 3.10 or later
+> - requests
+> - BeautifulSoup
 
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/get_dividend_demo.gif)
 
