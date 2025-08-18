@@ -49,11 +49,11 @@ $env:ALPHA_VANTAGE_KEY="your_api_key_here"
 
 ### calculate_YTW
 
-This script calculates a bond's Yield to Maturity (YTM) using the industry-standard Bond Equivalent Yield (BEY) method, which accurately accounts for accrued interest and semi-annual coupon payments.
+This script calculates a bond's Yield to Maturity (YTM) using the industry-standard Bond Equivalent Yield (BEY) method, which accounts for accrued interest and semi-annual coupon payments.
 
 ```Dependencies:
 - Python 3.10 or later
-- No third-party dependencies (only Python standard library modules are used)
+- No third-party dependencies (only Python standard library modules are used)```
 
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/calculate_YTW_demo.gif)
 
