@@ -134,7 +134,7 @@ class EdgarClient:
         self.last_request_time = 0
         self.min_request_interval = 0.1  # 100ms between requests
         self.headers = {
-            "User-Agent": "FinancialAnalytics/1.0 (asanchez@example.com)",  # Required by SEC
+            "User-Agent": "FinancialAnalytics/1.0 (user@example.com)",  # Required by SEC
             "Accept": "application/json",
         }
 
