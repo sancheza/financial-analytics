@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta

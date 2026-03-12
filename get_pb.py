@@ -2,36 +2,15 @@
 
 import sys
 import requests
+import yfinance as yf
 from bs4 import BeautifulSoup
 
 VERSION = "1.0.3"
 
 def get_pb(ticker):
-    url = f"https://finance.yahoo.com/quote/{ticker}/key-statistics"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(url, headers=headers, timeout=10)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    # Find the Price/Book row in the table
-    # Look for the cell containing "Price/Book" text
-    for row in soup.find_all("tr"):
-        cells = row.find_all("td")
-        if len(cells) >= 2:
-            # Check if the first cell contains "Price/Book"
-            if cells[0] and "Price/Book" in cells[0].get_text():
-                # Get the value from the second cell
-                raw_value = cells[1].get_text().strip()
-                # If the value is "--", return "N/A"
-                if raw_value == "--":
-                    return "N/A"
-                # If the value is empty or invalid, return "N/A"
-                if not raw_value or raw_value == "-":
-                    return "N/A"
-                return raw_value
-
-    # If no "Price/Book" entry is found, return "N/A"
-    return "N/A"
+    stock = yf.Ticker(ticker)
+    pb = stock.info.get("priceToBook", None)
+    return pb
 
 def print_help():
     help_text = """
