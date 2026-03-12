@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 VERSION = "1.0.1"
 # Updated scraping logic to be more resilient to Yahoo Finance page changes.
 
+
 def get_earnings_date(ticker):
     url = f"https://finance.yahoo.com/quote/{ticker}"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -25,12 +26,12 @@ def get_earnings_date(ticker):
 
     # Method 2 (Fallback): Find the label by its text content if the first method fails.
     if not raw_value or raw_value in ["", "--", "-"]:
-        label_span = soup.find("span", string="Earnings Date")
-        if label_span:
-            # The value is usually in the next sibling span.
-            value_span = label_span.find_next_sibling("span")
-            if value_span:
-                raw_value = value_span.text.strip()
+        for span in soup.find_all("span"):
+            if "Earnings Date" in span.text:
+                value_span = span.find_next_sibling("span")
+                if value_span:
+                    raw_value = value_span.text.strip()
+                    break
 
     # Process the extracted value
     if raw_value:
@@ -42,6 +43,7 @@ def get_earnings_date(ticker):
 
     # If no value was found by any method, return an empty string.
     return ""
+
 
 def print_help():
     help_text = """
@@ -55,6 +57,7 @@ Arguments:
   TICKER          The stock ticker symbol to fetch the Earnings Date information for
 """
     print(help_text)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
