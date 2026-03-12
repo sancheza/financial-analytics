@@ -23,40 +23,86 @@ except ImportError:
     sys.exit(1)
 
 
-VERSION = "1.23" # Updated version
+VERSION = "1.2.3" # Updated version
 SETTLEMENT_LAG_DAYS = 1
 
 def print_help():
-    print(f"""\
-bond_return_calc.py — this script evaluates a secondary market bond's return and evaluates a comparable recent public auction
+    # ANSI escape codes for formatting
+    BOLD = "\033[1m"
+    CYAN = "\033[96m"
+    GOLD = "\033[38;5;220m"
+    GREY = "\033[90m"
+    RESET = "\033[0m"
 
-USAGE:
-    Single Bond: bond_return_calc.py <coupon> <maturity_MM/DD/YYYY> <price> [--debug]
-    Batch Mode:  bond_return_calc.py --batch <path_to_csv_file> [--debug]
+    # Helper for section headers
+    def header(text):
+        return f"{BOLD}{CYAN}{text}{RESET}"
 
-DESCRIPTION:
-    Computes Yield to Maturity (YTM) using standard Bond Equivalent Yield (BEY) conventions.
-    BEY assumes semi-annual compounding (doubling the semi-annual yield) and uses an Actual/Actual day count for accrued interest. Settlement is T+1.
-    Calculates Modified Duration and Convexity to assess interest rate risk.
-    Compares the bond's YTM against an *interpolated* Treasury benchmark yield derived from the two closest standard Treasury maturities. This provides a more precise comparison point for the bond's specific maturity.
-    Also shows a simplified total return assuming coupons are held until maturity (not reinvested).
+    # Helper for commands/options
+    def cmd(text):
+        return f"{GOLD}{text}{RESET}"
 
-    Input format for single bond matches E*TRADE bond listings, e.g. bond_return_calc.py 4.625 01/31/2025 99.75
+    # Helper for placeholders
+    def placeholder(text):
+        return f"{GREY}{text}{RESET}"
 
-    Batch mode expects a CSV file containing bond data, typically exported from a brokerage website.
-    The script uses fuzzy matching to find columns corresponding to 'Coupon', 'Maturity', and 'Price'.
-    Browser extensions like 'Table Capture' (for Chrome/Edge) can export bond search results into a suitable CSV format.
+    print(f"""
+{header('bond_return_calc.py')} - A comprehensive secondary market bond analysis tool.
 
-OPTIONS:
-    <coupon>        Bond coupon rate (e.g., 4.625) - For single bond mode
-    <maturity>      Bond maturity date (MM/DD/YYYY) - For single bond mode
-    <price>         Bond clean price (e.g., 99.75) - For single bond mode
+{header('OVERVIEW')}
+  This script provides a detailed analysis for a secondary market bond, calculating
+  key financial metrics and comparing its yield against a relevant Treasury benchmark.
+  It can be run on a single bond or in batch mode on a CSV file.
 
-    -b, --batch FILE Path to CSV file for batch processing.
-                     Expects columns for Coupon, Maturity (MM/DD/YYYY), and Price.
-    -h, --help       Show this help message
-    -v, --version    Show version information
-    --debug          Enable verbose API and filtering output
+{header('USAGE EXAMPLES')}
+  {BOLD}Single Bond Analysis:{RESET}
+    {cmd('bond_return_calc.py')} {placeholder('<coupon> <maturity> <price>')}
+    {GREY}e.g., {cmd('bond_return_calc.py 4.625 01/31/2025 99.75')}{RESET}
+
+  {BOLD}Batch Processing from CSV:{RESET}
+    {cmd('bond_return_calc.py --batch')} {placeholder('<path_to_csv_file>')}
+    {GREY}e.g., {cmd('bond_return_calc.py --batch ./my_bonds.csv')}{RESET}
+
+{header('HOW IT WORKS')}
+  This tool performs several calculations to provide a holistic view of a bond's value
+  and risk profile.
+
+  {BOLD}1. Core Calculations:{RESET}
+    • {BOLD}Yield to Maturity (YTM):{RESET} Calculated using the standard Bond Equivalent Yield (BEY)
+      convention, which assumes semi-annual compounding and an Actual/Actual day count.
+      Settlement is assumed to be the next business day (T+1).
+    • {BOLD}Risk Metrics:{RESET} Computes Modified Duration and Convexity to quantify the bond's
+      price sensitivity to interest rate changes.
+
+  {BOLD}2. Benchmark Comparison & Data Source:{RESET}
+    • {BOLD}Data Source:{RESET} The script fetches {BOLD}live U.S. Treasury auction yield data{RESET} to establish
+      a risk-free benchmark. This ensures the comparison is timely and relevant.
+    • {BOLD}Interpolation:{RESET} A bond's maturity rarely matches a standard Treasury's exactly.
+      To create a precise comparison, the script identifies the two closest Treasury
+      maturities (e.g., 5-Year and 7-Year) and {BOLD}linearly interpolates{RESET} a benchmark yield
+      specific to the bond's exact time-to-maturity.
+    • {BOLD}Spread:{RESET} The output shows the "spread" – the difference in basis points (1/100th
+      of a percent) between the bond's YTM and the interpolated Treasury benchmark.
+
+  {BOLD}3. Grading System:{RESET}
+    • A comparative grade (A+ to F) is assigned based on the calculated spread.
+    • The grading thresholds are adjusted for the bond's maturity (short, medium,
+      or long-term), as longer-term bonds typically require a higher spread to
+      compensate for their increased risk.
+
+{header('OPTIONS')}
+  {BOLD}Positional Arguments (for single bond mode):{RESET}
+    {placeholder('<coupon>')}          Bond coupon rate (e.g., 4.625)
+    {placeholder('<maturity>')}        Bond maturity date in MM/DD/YYYY format
+    {placeholder('<price>')}           Bond clean price (e.g., 99.75)
+
+  {BOLD}Optional Arguments:{RESET}
+    {cmd('-b, --batch FILE')}   Path to a CSV file for batch processing. The script uses
+                        fuzzy matching to find 'Coupon', 'Maturity', and 'Price' columns.
+    {cmd('-h, --help')}         Show this detailed help message and exit.
+    {cmd('-v, --version')}      Show the script version and exit.
+    {cmd('--debug')}            Enable verbose output for debugging, including API calls and
+                        row-by-row processing details.
 """)
 
 
@@ -278,7 +324,7 @@ def _fetch_single_yield(duration_code: str, debug: bool) -> Optional[float]:
         print(f"Fetching benchmark yield for {duration_code}...")
         # Allow fetch_auction_yield to print directly in debug mode
         try:
-            result = fetch_auction_yield(duration_code, datetime.datetime.today())
+            result = fetch_auction_yield(duration_code, datetime.datetime.today(), debug=debug)
         except Exception as e:
             # Still good to catch potential errors during fetch
              print(f"Error during fetch_auction_yield for {duration_code}: {e}", file=sys.stderr)
@@ -287,7 +333,7 @@ def _fetch_single_yield(duration_code: str, debug: bool) -> Optional[float]:
         # Use contextlib to capture stdout and stderr when not in debug mode
         with contextlib.redirect_stdout(api_output_capture), contextlib.redirect_stderr(api_output_capture):
             try:
-                result = fetch_auction_yield(duration_code, datetime.datetime.today())
+                result = fetch_auction_yield(duration_code, datetime.datetime.today(), debug=debug)
             except Exception as e:
                  # In non-debug, we might just want to know it failed without printing the exception
                  # Or optionally log it differently. For now, let it pass to result check.

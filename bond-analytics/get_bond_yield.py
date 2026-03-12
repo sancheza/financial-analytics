@@ -4,7 +4,14 @@ import sys
 from datetime import datetime, timedelta
 import requests
 
-VERSION = "1.04"
+VERSION = "1.0.4"
+
+# ANSI escape codes for formatting
+BOLD = "\033[1m"
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
 
 # Dictionary of duration codes to labels
 DURATION_LABELS = {
@@ -59,36 +66,37 @@ SECURITY_TYPES = {
 }
 
 DESCRIPTION = f"""
-Treasury Bond Yield Fetcher v{VERSION}
-Retrieves real historical auction yields for Treasury bills, notes, bonds, TIPS, and FRNs.
+{GREEN}{BOLD}Get Bond Yield v{VERSION}{RESET}
+{CYAN}Retrieves real historical auction yields for Treasury bills, notes, bonds, TIPS, and FRNs.{RESET}
 """
 
-EPILOG = """
-Examples:
-  Get the latest 10-Year Treasury Note yield:
-    python get_bond_yield.py --duration 10Y
+EPILOG = f"""
+{BOLD}{CYAN}Examples:{RESET}
+  {GREEN}# Get the latest 10-Year Treasury Note yield:{RESET}
+    {YELLOW}python get_bond_yield.py --duration 10Y{RESET}
     
-  Get the 2-Year Treasury Note yield for a specific date:
-    python get_bond_yield.py --duration 2Y --date 05152023
+  {GREEN}# Get the 2-Year Treasury Note yield for a specific date:{RESET}
+    {YELLOW}python get_bond_yield.py --duration 2Y --date 05152023{RESET}
     
-  Get the 13-Week Treasury Bill yield:
-    python get_bond_yield.py --duration 13W
+  {GREEN}# Get the 13-Week Treasury Bill yield:{RESET}
+    {YELLOW}python get_bond_yield.py --duration 13W{RESET}
     
-  Get the 5-Year TIPS yield:
-    python get_bond_yield.py --duration "5Y TIPS"
+  {GREEN}# Get the 5-Year TIPS yield:{RESET}
+    {YELLOW}python get_bond_yield.py --duration "5Y TIPS"{RESET}
 """
 
 # Use the FiscalData API (known to work)
 API_BASE_URL = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service"
 AUCTION_DATA_ENDPOINT = f"{API_BASE_URL}/v1/accounting/od/auctions_query"
 
-def fetch_auction_yield(duration_code, target_date):
+def fetch_auction_yield(duration_code, target_date, debug=False):
     """
     Fetch the auction yield for a specific Treasury security using the FiscalData API.
     
     Args:
         duration_code (str): Duration code like "10Y" or "5Y TIPS"
         target_date (datetime): Target date to fetch yield for
+        debug (bool): If True, print detailed logging for debugging.
         
     Returns:
         tuple or None: (security_type, security_term, cusip, auction_date, yield_value) if found,
@@ -136,20 +144,24 @@ def fetch_auction_yield(duration_code, target_date):
         if not is_tips and not is_frn:
             params["filter"] = f"security_type:eq:{security_type}"
         
-        print(f"\nQuerying Treasury API for {security_type}s with term related to {security_term_label} around {target_date_str}")
+        if debug:
+            print(f"\nQuerying Treasury API for {security_type}s with term related to {security_term_label} around {target_date_str}")
         r = requests.get(AUCTION_DATA_ENDPOINT, params=params)
         
-        print(f"API URL: {r.url}")
+        if debug:
+            print(f"API URL: {r.url}")
         
         r.raise_for_status()
         data = r.json()
         
         if not data.get("data"):
-            print(f"No auction data returned from API.")
+            if debug:
+                print(f"No auction data returned from API.")
             return None
         
         auctions = data.get("data", [])    
-        print(f"\nReceived {len(auctions)} auctions. Filtering for {security_type} with terms related to {security_term_label}...")
+        if debug:
+            print(f"\nReceived {len(auctions)} auctions. Filtering for {security_type} with terms related to {security_term_label}...")
         
         # Filter for relevant auctions based on term pattern and security type
         relevant_auctions = []
@@ -218,10 +230,12 @@ def fetch_auction_yield(duration_code, target_date):
                     relevant_auctions.append(auction)
         
         if not relevant_auctions:
-            print(f"No matching {security_type} auctions found with term pattern related to {security_term_label}.")
+            if debug:
+                print(f"No matching {security_type} auctions found with term pattern related to {security_term_label}.")
             return None
             
-        print(f"Found {len(relevant_auctions)} matching {security_type} auctions. Finding closest to {target_date_str}...")
+        if debug:
+            print(f"Found {len(relevant_auctions)} matching {security_type} auctions. Finding closest to {target_date_str}...")
         
         # Find auction closest to target date
         closest_auction = None
@@ -237,24 +251,27 @@ def fetch_auction_yield(duration_code, target_date):
                     closest_auction = auction
                     
             except (ValueError, KeyError) as e:
-                print(f"Skipping auction with error: {e}")
+                if debug:
+                    print(f"Skipping auction with error: {e}")
                 continue
         
         if not closest_auction:
-            print(f"Could not determine the closest auction with a valid yield.")
+            if debug:
+                print(f"Could not determine the closest auction with a valid yield.")
             return None
 
         # Print the details of the closest auction
-        print(f"Closest auction found: Date={closest_auction['auction_date']}, "
+        print(f"{GREEN}Closest auction found: Date={closest_auction['auction_date']}, "
               f"Term={closest_auction['security_term']}, "
               f"Yield={closest_auction['high_yield']}% "
-              f"(Difference: {min_diff.days} days)")
+              f"(Difference: {min_diff.days} days){RESET}")
 
         # Handle null yield values
         if closest_auction["high_yield"] == "null" or closest_auction["high_yield"] is None:
             if is_frn:
-                print("\nNote: FRNs do not have a fixed 'high_yield' value as they use floating rates based on auction-determined spreads.")
-                print("The spread to the index rate would be a more appropriate measure for FRNs.")
+                if debug:
+                    print("\nNote: FRNs do not have a fixed 'high_yield' value as they use floating rates based on auction-determined spreads.")
+                    print("The spread to the index rate would be a more appropriate measure for FRNs.")
                 
                 # Return FRN data with a placeholder yield
                 return (
@@ -265,9 +282,10 @@ def fetch_auction_yield(duration_code, target_date):
                     0.0  # Placeholder yield
                 )
             else:
-                print("\nWarning: The closest auction has a null yield value.")
-                print("This is common with recent Treasury Bill auctions.")
-                print("The yield data may not be available yet or is reported differently.")
+                if debug:
+                    print("\nWarning: The closest auction has a null yield value.")
+                    print("This is common with recent Treasury Bill auctions.")
+                    print("The yield data may not be available yet or is reported differently.")
                 
                 # For display purposes only - don't use in calculations
                 return (
@@ -290,8 +308,9 @@ def fetch_auction_yield(duration_code, target_date):
     except requests.exceptions.HTTPError as e:
         print(f"HTTP Error: {e}")
         if hasattr(e.response, 'text'):
-            print(f"Response text: {e.response.text}")
-        print(f"URL attempted: {e.response.url}")
+            if debug:
+                print(f"Response text: {e.response.text}")
+                print(f"URL attempted: {e.response.url}")
         return None
     except requests.exceptions.RequestException as e:
         print(f"Error connecting to Treasury API: {e}")
@@ -314,6 +333,9 @@ def main():
     parser.add_argument('--duration', default="20Y", 
                         help='Bond duration code (e.g., 13W, 10Y, 20Y). Default: 20Y')
     parser.add_argument('--date', help='Target date (MMDDYYYY format), default: today')
+    parser.add_argument('--debug', action='store_true', help='Enable detailed logging for debugging.')
+    parser.add_argument('-v', '--version', action='version', 
+                        version=f'Get Bond Yield version {VERSION}')
     
     args = parser.parse_args()
     
@@ -340,7 +362,7 @@ def main():
         target_date = datetime.now()
     
     # Fetch auction yield
-    result = fetch_auction_yield(duration_code, target_date)
+    result = fetch_auction_yield(duration_code, target_date, args.debug)
     
     # Exit if we couldn't get a valid yield
     if result is None:
@@ -349,7 +371,7 @@ def main():
     sec_type, sec_term, cusip, auc_date, yield_value = result
     
     # Print the security details
-    print(f"\nTreasury {sec_type} ({sec_term}):")
+    print(f"\n{BOLD}{YELLOW}Treasury {sec_type} ({sec_term}):{RESET}")
     print(f"  CUSIP: {cusip}")
     print(f"  Auction Date: {auc_date.strftime('%Y-%m-%d')}")
     print(f"  Yield: {yield_value:.3f}%")

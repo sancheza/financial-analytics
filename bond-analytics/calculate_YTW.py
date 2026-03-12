@@ -271,7 +271,7 @@ def main():
     parser.add_argument("--settlement", type=str, help="Settlement date in MM/DD/YYYY format (default: T+1)")
     parser.add_argument("--showjson", action="store_true", help="Output results in JSON format.")
     parser.add_argument("--facevalue", type=float, default=100.0, help="Face value of the bond (default: 100.0)")
-    parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {VERSION}')
+    parser.add_argument('-v', '--version', action='version', version=f'%(prog)s version {VERSION}')
 
     args = parser.parse_args()
 

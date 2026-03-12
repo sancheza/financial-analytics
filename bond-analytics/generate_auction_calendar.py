@@ -7,9 +7,11 @@ import logging
 import re
 import json
 import argparse
+import subprocess
+import platform
 
 # Configure logging with option to disable file logging
-def setup_logging(log_to_file=True):
+def setup_logging(log_to_file: bool = True) -> logging.Logger:
     """Setup logging configuration"""
     handlers = [logging.StreamHandler(sys.stdout)]
     if log_to_file:
@@ -22,11 +24,46 @@ def setup_logging(log_to_file=True):
     )
     return logging.getLogger(__name__)
 
-VERSION = "1.01"
+VERSION = "1.0.4"
+# v1.04: Renamed --open to --import for clarity on adding events to calendar.
 
-def parse_arguments():
+
+def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments"""
-    parser = argparse.ArgumentParser(description='Generate a calendar of Treasury security auctions.')
+    # ANSI escape codes for formatting
+    BOLD = "\033[1m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[33m"
+    RESET = "\033[0m"
+
+    description_text = f"""{GREEN}{BOLD}Treasury Auction Calendar Generator v{VERSION}{RESET}
+
+{CYAN}{BOLD}OVERVIEW:{RESET}
+  This script generates a personalized iCalendar (.ics) file containing upcoming
+  U.S. Treasury security auctions. It fetches real-time data from the official
+  FiscalData Treasury API, allowing you to easily import auction schedules into
+  your favorite calendar application (Google Calendar, Outlook, Apple Calendar, etc.).
+  You can filter auctions by specific security types or include all.
+
+{CYAN}{BOLD}USAGE:{RESET}
+  {YELLOW}python generate_auction_calendar.py [OPTIONS] [YEAR]{RESET}
+
+{CYAN}{BOLD}EXAMPLES:{RESET}
+  {GREEN}# Generate calendar for the current year with standard securities (default){RESET}
+  {YELLOW}python generate_auction_calendar.py{RESET}
+
+  {GREEN}# Generate calendar for 2024 including ALL Treasury auctions{RESET}
+  {YELLOW}python generate_auction_calendar.py 2024 --all{RESET}
+
+  {GREEN}# Generate calendar for 2023 with only MINIMUM key securities and debug info{RESET}
+  {YELLOW}python generate_auction_calendar.py 2023 --minimum --debug{RESET}
+
+  {GREEN}# Generate calendar for the current year and import it automatically{RESET}
+  {YELLOW}python generate_auction_calendar.py --import{RESET}
+"""
+
+    parser = argparse.ArgumentParser(description=description_text, formatter_class=argparse.RawTextHelpFormatter)
     
     # Year argument
     parser.add_argument('year', nargs='?', type=int, default=datetime.now().year,
@@ -48,15 +85,17 @@ def parse_arguments():
                        help='Enable debug mode with additional logging and save raw API response')
     parser.add_argument('--no-log-file', action='store_true',
                        help='Disable logging to file')
+    parser.add_argument('--import', action='store_true', dest='import_calendar',
+                       help='Automatically import the generated .ics file into your default calendar application.')
     
     # Version and help
     parser.add_argument('-v', '--version', action='version',
-                      version=f'Treasury Auction Calendar Generator v{VERSION}')
+                      version=f'Treasury Auction Calendar Generator version {VERSION}')
     
     args = parser.parse_args()
     return args
 
-def fetch_auctions(year, debug=False):
+def fetch_auctions(year: int, debug: bool = False) -> list:
     """
     Fetch auction data from Treasury API
     
@@ -154,26 +193,86 @@ def fetch_auctions(year, debug=False):
             print(f"API request failed: {e}")
         
         if hasattr(e, 'response') and e.response is not None:
-            logger.error(f"Response status code: {e.response.status_code}")
-            if debug:
-                print(f"Response status code: {e.response.status_code}")
-                print(f"Response text: {e.response.text[:500]}...")
+            status_code = e.response.status_code
+            logger.error(f"Response status code: {status_code}")
+            
+            # Provide helpful messages for common API errors
+            if status_code == 429:
+                print("ERROR: API rate limit exceeded. Please wait a few minutes and try again.")
+            elif status_code == 403:
+                print("ERROR: Access forbidden. The API endpoint may have changed or requires authentication.")
+            elif status_code >= 500:
+                print("ERROR: The Treasury API server is experiencing issues. Please try again later.")
+            else:
+                if debug:
+                    print(f"Response status code: {status_code}")
+                    print(f"Response text: {e.response.text[:500]}...")
+        else:
+            print("ERROR: Could not connect to the Treasury API. Please check your internet connection.")
         
         return []
 
-def format_ics(events):
-    """Format events into iCalendar format"""
-    ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"]
+def format_ics(events: list) -> str:
+    """Format events into iCalendar format with proper UIDs and formatting"""
+    now = datetime.now().strftime("%Y%m%dT%H%M%SZ")
+    prodid = f"-//Treasury Auction Calendar Generator v{VERSION}//EN"
+    
+    ics = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        f"PRODID:{prodid}",
+        f"X-WR-CALNAME:Treasury Auctions",
+        f"X-WR-CALDESC:U.S. Treasury Security Auctions",
+        f"X-WR-TIMEZONE:UTC"
+    ]
+    
     for e in events:
+        # Create a consistent UID based on the event details
+        event_id = f"{e['date']}-{e['title'].replace(' ', '_')}"
+        uid = f"{event_id}@treasury.auction.calendar"
+        
         ics.append("BEGIN:VEVENT")
-        ics.append(f"SUMMARY:{e['title']}")
+        ics.append(f"UID:{uid}")
+        ics.append(f"DTSTAMP:{now}")
         ics.append(f"DTSTART;VALUE=DATE:{e['date']}")
-        ics.append(f"DESCRIPTION:{e['desc']}")
+        ics.append(f"SUMMARY:{e['title']}")
+        # Format multi-line description properly
+        desc = e['desc'].replace("\n", "\\n")
+        ics.append(f"DESCRIPTION:{desc}")
+        ics.append(f"CATEGORIES:Treasury Auction")
+        ics.append(f"TRANSP:TRANSPARENT")  # Does not block time in calendar
+        
+        # Add an alarm for 2 days before the auction
+        ics.append("BEGIN:VALARM")
+        ics.append("ACTION:DISPLAY")
+        ics.append(f"DESCRIPTION:Reminder: {e['title']} is coming up")
+        ics.append("TRIGGER:-P2D")  # 2 days before the event
+        ics.append("END:VALARM")
+        
         ics.append("END:VEVENT")
+    
     ics.append("END:VCALENDAR")
     return "\n".join(ics)
 
-def main():
+def open_file(filepath: str) -> None:
+    """Opens a file with the default application for the current OS."""
+    system = platform.system()
+    try:
+        if system == "Darwin":  # macOS
+            subprocess.run(["open", filepath], check=True)
+        elif system == "Windows":
+            os.startfile(filepath)
+        else:  # Linux and other Unix-like
+            subprocess.run(["xdg-open", filepath], check=True)
+        logger.info(f"Attempting to open calendar file: {filepath}")
+    except (FileNotFoundError, subprocess.CalledProcessError, AttributeError) as e:
+        logger.error(f"Failed to open calendar file automatically: {e}")
+        print(f"\nCould not open {filepath} automatically.")
+        print("Please open the file manually in your calendar application.")
+
+def main() -> None:
     """Main function to generate the auction calendar"""
     # Parse command line arguments
     args = parse_arguments()
@@ -188,6 +287,7 @@ def main():
     global logger
     logger = setup_logging(not args.no_log_file)
     
+    print(f"Treasury Auction Calendar Generator v{VERSION}")
     print(f"Generating calendar for year: {year}")
     print(f"Output will be saved to: {output_file}")
     
@@ -214,6 +314,12 @@ def main():
     
     print("Fetching Treasury auction data...")
     auctions = fetch_auctions(year, debug=debug_mode)
+    
+    # If no auctions were retrieved, exit gracefully
+    if not auctions:
+        print("\nCould not retrieve any auction data from the API. No calendar file will be generated.")
+        return
+
     print(f"Retrieved {len(auctions)} auctions in total")
     
     events = []
@@ -287,12 +393,16 @@ def main():
         with open(output_file, "w") as f:
             f.write(ics_text)
         print(f"✅ Calendar saved as: {output_file} with {len(events)} events")
+        if args.import_calendar:
+            open_file(output_file)
     else:
         print(f"No relevant auctions found for {year}")
         # Create an empty calendar file
         with open(output_file, "w") as f:
             f.write(format_ics([]))
         print(f"✅ Empty calendar file created: {output_file}")
+        if args.import_calendar:
+            open_file(output_file)
 
 if __name__ == "__main__":
     main()
