@@ -57,7 +57,6 @@ This script calculates a bond's Yield to Maturity (YTM) using the industry-stand
 
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/calculate_YTW_demo.gif)
 
-
 ### getBookValueFMP
 
 This is a Google Sheets function that populates book value in a worksheet for a set of tickers.
@@ -68,7 +67,6 @@ Create a Google worksheet with stock tickers in one column and a trigger cell us
 You will need to update the function with your API key. You can obtain it at the link listed below under Dependencies.
 
 The function will populate the cell in which it is called as well as the two to the right of it. See cells I2 through K2 in the demo below.
-
 
 > **Dependencies**
 > - Google Sheets
@@ -86,6 +84,68 @@ This script retrieves the Forward Dividend Yield for a given stock ticker from Y
 > - BeautifulSoup
 
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/get_dividend_demo.gif)
+
+### get_earnings_date
+This script retrieves the next earnings date for a given stock ticker. It can be run from the terminal or called by other scripts.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - requests
+> - beautifulsoup4
+
+### get_ex_dividend
+This script retrieves the Ex-Dividend date for a given stock ticker. Similar to get_earnings_date, it can be run from the terminal or integrated into other workflows.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - requests
+> - beautifulsoup4
+
+### get_fair_value
+This script fetches fair value estimates for a given stock ticker.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - playwright
+> - beautifulsoup4
+
+### get_forwardpe
+This script retrieves the Forward P/E ratio for a given stock ticker. It provides a reliable way to get forward valuation metrics.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - yfinance
+
+### get_pb
+This script retrieves the Price-to-Book (P/B) ratio for a given stock ticker.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - yfinance
+
+### get_projected_fcf
+This script fetches the projected Free Cash Flow (FCF) for a given stock ticker.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - playwright
+> - beautifulsoup4
+
+### get_ticker_range
+This script downloads historical price data for a list of tickers and calculates the 30-day low and high prices. It outputs a summary table with the range data.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - yfinance
+> - pandas
+
+### get_yearly_performance
+This script retrieves stock performance data for a given ticker and year. It returns the start price, end price, dollar change, and percent change for the specified year.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - yfinance
+> - pandas
 
 ### value_price_screener
 This tool performs value analytics by identifying historically undervalued dividend-paying companies from the S&P 500 and measuring their performance in the year following the target year. It enables rigorous backtesting of value investing principles using accurate historical data.
@@ -126,88 +186,9 @@ This script analyzes the current S&P 500 constituents and identifies stocks that
 
 ![](https://github.com/sancheza/Finance-scripts/blob/main/assets/value_screener_peak_drawdown_demo.gif)
 
-
-### get_projected_fcf
-This script fetches the projected Free Cash Flow (FCF) for a given stock ticker.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - playwright
-> - beautifulsoup4
-
-### get_earnings_date
-This script retrieves the next earnings date for a given stock ticker. It can be run from the terminal or called by other scripts.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - requests
-> - beautifulsoup4
-
-### get_ex_dividend
-This script retrieves the Ex-Dividend date for a given stock ticker. Similar to get_earnings_date, it can be run from the terminal or integrated into other workflows.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - requests
-> - beautifulsoup4
-
-### get_fair_value
-This script fetches fair value estimates for a given stock ticker.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - playwright
-> - beautifulsoup4
-
-### get_forwardpe
-This script retrieves the Forward P/E ratio for a given stock ticker. It provides a reliable way to get forward valuation metrics.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - yfinance
-
-### get_ticker_range
-This script downloads historical price data for a list of tickers and calculates the 30-day low and high prices. It outputs a summary table with the range data.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - yfinance
-> - pandas
-
-### get_yearly_performance
-This script retrieves stock performance data for a given ticker and year. It returns the start price, end price, dollar change, and percent change for the specified year.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - yfinance
-> - pandas
-
-### get_pb
-This script retrieves the Price-to-Book (P/B) ratio for a given stock ticker.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - yfinance
-
-
 ## Bond Analytics Tools
 
 The following tools are located in the `bond-analytics/` directory and focus on US Treasury bond analysis.
-
-### generate_auction_calendar
-This script generates a Treasury auction calendar by fetching upcoming auction dates from the TreasuryDirect website. It provides a comprehensive schedule of upcoming Treasury bill, note, and bond auctions.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - requests
-> - beautifulsoup4
-
-### bond_market_analyzer
-This script analyzes Treasury bonds from the secondary market. It parses input data (CUSIP, price, yield) and calculates various metrics including Yield to Maturity (YTM) using the Bond Equivalent Yield (BEY) method.
-
-> **Dependencies**
-> - Python 3.10 or later
-> - Standard library only (uses calculate_YTW module)
 
 ### bond_alert
 This script monitors US Treasury bond yields (10Y, 20Y, 30Y, and 10Y TIPS) using the FRED API. It checks if yields exceed configured thresholds and sends email alerts when thresholds are breached.
@@ -217,12 +198,19 @@ This script monitors US Treasury bond yields (10Y, 20Y, 30Y, and 10Y TIPS) using
 > - requests
 > - python-dotenv
 
-### get_bond_yield
-This script fetches current Treasury yields from the FRED (Federal Reserve Economic Data) API. It supports various maturities including Treasury Bills (4W, 8W, 13W, etc.) and Treasury Notes/Bonds (2Y, 5Y, 10Y, 20Y, 30Y).
+### bond_market_analyzer
+This script analyzes Treasury bonds from the secondary market. It parses input data (CUSIP, price, yield) and calculates various metrics including Yield to Maturity (YTM) using the Bond Equivalent Yield (BEY) method.
 
 > **Dependencies**
 > - Python 3.10 or later
-> - requests
+> - Standard library only (uses calculate_YTW module)
+
+### bond_market_analyzer_viewer
+This script reads treasury bond data from a JSON file and displays it in a well-formatted table. It's used to visualize data generated by other bond analytics tools.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - Standard library only
 
 ### bond_return_calc
 This script calculates the total return for Treasury bonds. It uses the Newton-Raphson method to compute yield and accounts for settlement dates, coupon payments, and semi-annual compounding.
@@ -234,12 +222,20 @@ This script calculates the total return for Treasury bonds. It uses the Newton-R
 > - tabulate
 > - thefuzz
 
-### bond_market_analyzer_viewer
-This script reads treasury bond data from a JSON file and displays it in a well-formatted table. It's used to visualize data generated by other bond analytics tools.
+### generate_auction_calendar
+This script generates a Treasury auction calendar by fetching upcoming auction dates from the TreasuryDirect website. It provides a comprehensive schedule of upcoming Treasury bill, note, and bond auctions.
 
 > **Dependencies**
 > - Python 3.10 or later
-> - Standard library only
+> - requests
+> - beautifulsoup4
+
+### get_bond_yield
+This script fetches current Treasury yields from the FRED (Federal Reserve Economic Data) API. It supports various maturities including Treasury Bills (4W, 8W, 13W, etc.) and Treasury Notes/Bonds (2Y, 5Y, 10Y, 20Y, 30Y).
+
+> **Dependencies**
+> - Python 3.10 or later
+> - requests
 
 
 ## LibreOffice Macros
