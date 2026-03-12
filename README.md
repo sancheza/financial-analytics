@@ -128,7 +128,7 @@ This script analyzes the current S&P 500 constituents and identifies stocks that
 
 
 ### get_projected_fcf
-This script fetches the projected Free Cash Flow (FCF) for a given stock ticker from GuruFocus. It uses Playwright to scrape the data from the GuruFocus website.
+This script fetches the projected Free Cash Flow (FCF) for a given stock ticker.
 
 > **Dependencies**
 > - Python 3.10 or later
@@ -136,7 +136,7 @@ This script fetches the projected Free Cash Flow (FCF) for a given stock ticker 
 > - beautifulsoup4
 
 ### get_earnings_date
-This script retrieves the next earnings date for a given stock ticker from Yahoo Finance. It can be run from the terminal or called by other scripts.
+This script retrieves the next earnings date for a given stock ticker. It can be run from the terminal or called by other scripts.
 
 > **Dependencies**
 > - Python 3.10 or later
@@ -144,7 +144,7 @@ This script retrieves the next earnings date for a given stock ticker from Yahoo
 > - beautifulsoup4
 
 ### get_ex_dividend
-This script retrieves the Ex-Dividend date for a given stock ticker from Yahoo Finance. Similar to get_earnings_date, it can be run from the terminal or integrated into other workflows.
+This script retrieves the Ex-Dividend date for a given stock ticker. Similar to get_earnings_date, it can be run from the terminal or integrated into other workflows.
 
 > **Dependencies**
 > - Python 3.10 or later
@@ -152,7 +152,7 @@ This script retrieves the Ex-Dividend date for a given stock ticker from Yahoo F
 > - beautifulsoup4
 
 ### get_fair_value
-This script fetches fair value estimates for a given stock ticker from GuruFocus. It uses Playwright to navigate to the GuruFocus page and extract the fair value data.
+This script fetches fair value estimates for a given stock ticker.
 
 > **Dependencies**
 > - Python 3.10 or later
@@ -160,7 +160,7 @@ This script fetches fair value estimates for a given stock ticker from GuruFocus
 > - beautifulsoup4
 
 ### get_forwardpe
-This script retrieves the Forward P/E ratio for a given stock ticker using the yfinance library. It provides a reliable way to get forward valuation metrics.
+This script retrieves the Forward P/E ratio for a given stock ticker. It provides a reliable way to get forward valuation metrics.
 
 > **Dependencies**
 > - Python 3.10 or later
@@ -183,7 +183,7 @@ This script retrieves stock performance data for a given ticker and year. It ret
 > - pandas
 
 ### get_pb
-This script retrieves the Price-to-Book (P/B) ratio for a given stock ticker using the yfinance library.
+This script retrieves the Price-to-Book (P/B) ratio for a given stock ticker.
 
 > **Dependencies**
 > - Python 3.10 or later
