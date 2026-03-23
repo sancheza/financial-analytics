@@ -290,6 +290,52 @@ class FairValueScraper:
         finally:
             sws_browser.close()
 
+    def get_fair_value_finbox(self, ticker: str) -> str | None:
+        """Fetches the fair value from FinBox.
+
+        FinBox blocks headless Chromium via Cloudflare, but headless Firefox
+        bypasses it without any human interaction (different TLS/JS fingerprint).
+        Tries common US exchange prefixes to resolve the correct URL.
+        """
+        exchange_prefixes = ["NYSE", "NasdaqGS", "NasdaqGM", "NasdaqCM"]
+        fb_browser = self.playwright.firefox.launch(headless=True)
+        try:
+            fb_context = fb_browser.new_context(
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0',
+                viewport={'width': 1440, 'height': 900},
+                locale='en-US',
+            )
+            page = fb_context.new_page()
+
+            resolved = False
+            for exchange in exchange_prefixes:
+                url = f"https://finbox.com/{exchange}:{ticker.upper()}/explorer/fair_value/"
+                page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                time.sleep(3)
+                title = page.title()
+                if "#ERROR!" not in title and "Just a moment" not in title:
+                    logger.info(f"FinBox: Resolved {exchange}:{ticker.upper()}")
+                    resolved = True
+                    break
+
+            if not resolved:
+                logger.warning(f"FinBox: Could not resolve ticker {ticker.upper()}")
+                return "Stock not found on FinBox"
+
+            body = page.inner_text("body")
+            m = re.search(r"fair value is ([\d.]+)", body, re.IGNORECASE)
+            if m:
+                logger.info(f"FinBox: fair value = {m.group(1)}")
+                return f"${m.group(1)}"
+
+            logger.warning(f"FinBox: Fair value not found in page for {ticker}")
+            return "Fair value not found"
+        except Exception as e:
+            logger.error(f"Error fetching FinBox data: {str(e)}")
+            return f"Error: {e}"
+        finally:
+            fb_browser.close()
+
     def fetch_all_parallel(self, ticker: str) -> dict[str, str | None]:
         """Fetch fair values from all four sources concurrently.
 
@@ -303,6 +349,7 @@ class FairValueScraper:
             ("ValueInvesting.io", "get_fair_value_valueinvesting_io"),
             ("GuruFocus",         "get_fair_value_gurufocus"),
             ("Simply Wall St",    "get_fair_value_simplywallst"),
+            ("FinBox",            "get_fair_value_finbox"),
         ]
 
         def run_isolated(method_name: str) -> str | None:
@@ -345,7 +392,7 @@ def process_ticker_file_fair_value(input_file: str, output_file: str, scraper: F
     print(f"Writing results to: {BColors.OKCYAN}{output_file}{BColors.ENDC}")
     with open(output_file, "w", newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Ticker", "AlphaSpread", "ValueInvesting.io", "GuruFocus", "Simply Wall St"])
+        writer.writerow(["Ticker", "AlphaSpread", "ValueInvesting.io", "GuruFocus", "Simply Wall St", "FinBox"])
         for i, ticker in enumerate(tickers):
             print(f"  Processing {ticker.upper()}...")
             results = scraper.fetch_all_parallel(ticker)
@@ -359,12 +406,14 @@ def process_ticker_file_fair_value(input_file: str, output_file: str, scraper: F
                 v = parse_value_from_string(text)
                 return str(v) if v is not None else ""
 
+            finbox_result_text = results.get("FinBox")
             writer.writerow([
                 ticker.upper(),
                 csv_val(alpha_result_text),
                 csv_val(valueinvesting_result_text),
                 csv_val(gurufocus_result_text),
                 csv_val(simplywallst_result_text),
+                csv_val(finbox_result_text),
             ])
             print(f"    AlphaSpread: {alpha_result_text or 'Not found'}")
             print(f"    ValueInvesting.io: {valueinvesting_result_text or 'Not found'}")
@@ -454,6 +503,11 @@ def main():
      {BColors.FAIL}Low to Moderate{BColors.ENDC} as it's criticized for being too optimistic. Because it is
      fully automated, it frequently misses one-time accounting charges or structural
      industry shifts.
+
+  {BColors.BOLD}FinBox{BColors.ENDC}
+     Uses a blended model averaging multiple valuation methods (DCF, Comparables,
+     and others) weighted by model confidence. Accuracy is considered {BColors.WARNING}Moderate to High{BColors.ENDC}.
+     Results tend to be more stable than single-model DCF approaches.
 """
     
     parser = argparse.ArgumentParser(
@@ -476,6 +530,8 @@ def main():
                        help="Output only the numeric value from GuruFocus.")
     parser.add_argument("-sw", "--simplywallst-only", action="store_true",
                        help="Output only the numeric value from Simply Wall St.")
+    parser.add_argument("-fb", "--finbox-only", action="store_true",
+                       help="Output only the numeric value from FinBox.")
     
     parser.add_argument("--debug", action="store_true",
                        help="Enable debug logging to show retrieval details (ignored in numeric-only or batch modes).")
@@ -494,7 +550,7 @@ def main():
         # Only show warnings and errors by default
         logging.basicConfig(level=logging.WARNING, format=log_format)
 
-    is_numeric_only_mode = args.alphaspread_only or args.valueinvesting_only or args.gurufocus_only or args.simplywallst_only
+    is_numeric_only_mode = args.alphaspread_only or args.valueinvesting_only or args.gurufocus_only or args.simplywallst_only or args.finbox_only
     is_batch_mode = args.input is not None
 
     # Initialize the scraper. It will be used in all modes.
@@ -507,7 +563,7 @@ def main():
             process_ticker_file_fair_value(args.input, args.output, scraper, debug=args.debug)
         elif args.ticker:
             # All single-ticker modes
-            if args.alphaspread_only or args.valueinvesting_only or args.gurufocus_only or args.simplywallst_only:
+            if args.alphaspread_only or args.valueinvesting_only or args.gurufocus_only or args.simplywallst_only or args.finbox_only:
                 # Numeric-only mode. Process in a fixed, predictable order.
                 outputs = []
                 if args.alphaspread_only:
@@ -529,6 +585,11 @@ def main():
                     result_text = scraper.get_fair_value_simplywallst(args.ticker)
                     numeric_value = parse_value_from_string(result_text)
                     outputs.append(f"{numeric_value if numeric_value is not None else ''}")
+
+                if args.finbox_only:
+                    result_text = scraper.get_fair_value_finbox(args.ticker)
+                    numeric_value = parse_value_from_string(result_text)
+                    outputs.append(f"{numeric_value if numeric_value is not None else ''}")
                 
                 print('\n'.join(outputs))
                 return
@@ -537,18 +598,20 @@ def main():
             print(f"\nFetching fair value estimates for: {BColors.BOLD}{args.ticker.upper()}{BColors.ENDC}\n")
 
             results = scraper.fetch_all_parallel(args.ticker)
-            alpha_result_text        = results.get("AlphaSpread")
+            alpha_result_text          = results.get("AlphaSpread")
             valueinvesting_result_text = results.get("ValueInvesting.io")
-            gurufocus_result_text    = results.get("GuruFocus")
-            simplywallst_result_text = results.get("Simply Wall St")
+            gurufocus_result_text      = results.get("GuruFocus")
+            simplywallst_result_text   = results.get("Simply Wall St")
+            finbox_result_text         = results.get("FinBox")
 
             ticker_upper = args.ticker.upper()
             ticker_lower = args.ticker.lower()
             results_data = [
-                {"source": "AlphaSpread", "text": alpha_result_text, "value": parse_value_from_string(alpha_result_text), "url": f"https://www.alphaspread.com/security/nasdaq/{ticker_lower}/summary"},
+                {"source": "AlphaSpread",       "text": alpha_result_text,          "value": parse_value_from_string(alpha_result_text),          "url": f"https://www.alphaspread.com/security/nasdaq/{ticker_lower}/summary"},
                 {"source": "ValueInvesting.io", "text": valueinvesting_result_text, "value": parse_value_from_string(valueinvesting_result_text), "url": f"https://valueinvesting.io/{ticker_upper}/valuation/fair-value"},
-                {"source": "GuruFocus", "text": gurufocus_result_text, "value": parse_value_from_string(gurufocus_result_text), "url": f"https://www.gurufocus.com/stock/{ticker_upper}/dcf"},
-                {"source": "Simply Wall St", "text": simplywallst_result_text, "value": parse_value_from_string(simplywallst_result_text), "url": f"https://simplywall.st/search?q={ticker_upper}"},
+                {"source": "GuruFocus",         "text": gurufocus_result_text,      "value": parse_value_from_string(gurufocus_result_text),      "url": f"https://www.gurufocus.com/stock/{ticker_upper}/dcf"},
+                {"source": "Simply Wall St",    "text": simplywallst_result_text,   "value": parse_value_from_string(simplywallst_result_text),   "url": f"https://simplywall.st/search?q={ticker_upper}"},
+                {"source": "FinBox",            "text": finbox_result_text,         "value": parse_value_from_string(finbox_result_text),         "url": f"https://finbox.com/NYSE:{ticker_upper}/explorer/fair_value/"},
             ]
         
             # --- Analyze and print results with colors ---
