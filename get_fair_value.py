@@ -498,17 +498,16 @@ def parse_value_from_string(s: str) -> float | None:
 
 
 def main():
-    description_text = f"""{BColors.BOLD}Get fair value estimates for a stock from AlphaSpread, ValueInvesting.io, and GuruFocus.{BColors.ENDC}
+    description_text = f"""{BColors.BOLD}Get fair value estimates for a stock from multiple online sources.{BColors.ENDC}
 
 {BColors.HEADER}Overview:{BColors.ENDC}
-  This script fetches the intrinsic/fair value of a given stock ticker from three
-  online sources: AlphaSpread, ValueInvesting.io, and GuruFocus. It uses Playwright to
-  automate a browser and bypass anti-bot protections to scrape the required data.
+  This script fetches the intrinsic/fair value of a given stock ticker from multiple online sources
+  including AlphaSpread, ValueInvesting.io, GuruFocus, Simply Wall St, and FinBox. It uses Playwright
+  to automate a browser and bypass anti-bot protections to scrape the required data.
 
 {BColors.HEADER}How it works:{BColors.ENDC}
   - You provide a stock ticker symbol (e.g., {BColors.OKGREEN}MRNA{BColors.ENDC}).
-  - The script uses Playwright to load AlphaSpread, ValueInvesting.io, and GuruFocus pages
-    and extract the fair value estimate for the stock.
+  - The script uses Playwright to load the source pages and extract the fair value estimate for the stock.
   - Results are printed to the console.
 
 {BColors.HEADER}Requirements:{BColors.ENDC}
