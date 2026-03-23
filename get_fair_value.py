@@ -101,34 +101,198 @@ class FairValueScraper:
             # Handle potential cookie consent banner
             try:
                 cookie_button_selector = 'button:has-text("Accept All")'
-                # Wait for a short time, as the banner may not always appear
                 page.wait_for_selector(cookie_button_selector, timeout=5000)
                 page.click(cookie_button_selector)
                 logger.info("GuruFocus: Clicked 'Accept All' cookie button.")
             except Exception:
                 logger.info("GuruFocus: Cookie consent banner not found or already handled.")
-            # using the specific XPath.
-            #selector = "xpath=//*[@id='components-root']/div[1]/div[4]/div/div[2]/div[1]/div/div[1]/div[2]/div/div[4]/div[2]"
-            # using the CSS selector.
-            selector = "#chart > div > svg > g > text:nth-child(9)"
-            page.wait_for_selector(selector, timeout=30000)
 
-            element_text = page.locator(selector).text_content()
+            page.wait_for_load_state("networkidle", timeout=60000)
 
-            if element_text:
-                logger.info(f"GuruFocus: Raw text from element: '{element_text}'")
-                # The inner_text might be '$ \n 41.33'. We need to clean it.
-                cleaned_text = re.sub(r'\s+', '', element_text)
-                logger.info(f"GuruFocus: Cleaned DCF value text: {cleaned_text}")
-                return cleaned_text
+            # Extract iv_dcf directly from the Nuxt.js server-side state.
+            # The DOM's "Fair Value" element is not reliably hydrated, so we read
+            # the raw data instead of relying on a fragile CSS/SVG selector.
+            iv_dcf = page.evaluate("""() => {
+                try {
+                    const fetchData = window.__NUXT__.fetch;
+                    for (const key of Object.keys(fetchData)) {
+                        const entry = fetchData[key];
+                        if (entry && entry.stock && entry.stock.iv_dcf !== undefined) {
+                            return entry.stock.iv_dcf;
+                        }
+                    }
+                } catch(e) { return null; }
+                return null;
+            }""")
 
-            logger.warning(f"GuruFocus: DCF value element not found for {ticker}")
-            return "DCF value not found"
+            if iv_dcf:
+                logger.info(f"GuruFocus: iv_dcf = {iv_dcf}")
+                return f"${iv_dcf}"
+
+            # iv_dcf is 0 or missing — the DCF value is computed client-side by Vue.
+            # Re-load the page in non-headless mode so the component fully renders,
+            # then read the Fair Value directly from the DOM.
+            logger.info(f"GuruFocus: iv_dcf unavailable for {ticker}, retrying in non-headless mode.")
         except Exception as e:
             logger.error(f"Error fetching GuruFocus data: {str(e)}")
             return f"Error: {e}"
         finally:
             page.close()
+
+        nh_browser = self.playwright.chromium.launch(
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled"]
+        )
+        try:
+            nh_context = nh_browser.new_context(
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                viewport={'width': 1920, 'height': 1080}
+            )
+            nh_context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+            nh_page = nh_context.new_page()
+            nh_page.goto(url, timeout=60000)
+            try:
+                nh_page.wait_for_selector('button:has-text("Accept All")', timeout=5000)
+                nh_page.click('button:has-text("Accept All")')
+            except Exception:
+                pass
+            nh_page.wait_for_load_state("networkidle", timeout=60000)
+
+            dom_value = nh_page.evaluate("""() => {
+                for (const row of document.querySelectorAll('.dcf-table-row')) {
+                    if (row.textContent.includes('Fair Value')) {
+                        const cell = row.querySelector('[class*="text-right"]');
+                        if (cell) {
+                            return Array.from(cell.childNodes)
+                                .filter(n => n.nodeType === 3)
+                                .map(n => n.textContent.trim())
+                                .filter(t => t.length > 0)
+                                .join(' ');
+                        }
+                    }
+                }
+                return null;
+            }""")
+
+            if dom_value:
+                logger.info(f"GuruFocus: DOM Fair Value = {dom_value!r}")
+                cleaned = re.sub(r'\s+', '', dom_value)
+                return cleaned
+
+            logger.warning(f"GuruFocus: Fair Value not found in DOM for {ticker}")
+            return "DCF value not found"
+        except Exception as e:
+            logger.error(f"Error fetching GuruFocus data (non-headless): {str(e)}")
+            return f"Error: {e}"
+        finally:
+            nh_browser.close()
+
+    def get_fair_value_simplywallst(self, ticker: str) -> str | None:
+        """Fetches the intrinsic fair value from Simply Wall St.
+
+        Simply Wall St blocks headless browsers via Cloudflare, so this method
+        launches a separate non-headless browser. It resolves the stock's canonical
+        URL via the SWS GraphQL API (trying common US exchange prefixes), then
+        extracts share_price and intrinsic_discount from the embedded React Query
+        state to compute: fair_value = share_price / (1 - intrinsic_discount / 100).
+        """
+        sws_browser = self.playwright.chromium.launch(
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled"]
+        )
+        try:
+            sws_context = sws_browser.new_context(
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                viewport={'width': 1440, 'height': 900},
+                locale='en-US',
+            )
+            sws_context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
+            page = sws_context.new_page()
+
+            # Step 1: Load any SWS page to obtain Cloudflare clearance.
+            page.goto("https://simplywall.st/stocks/us/market-cap-large", timeout=60000, wait_until="domcontentloaded")
+            time.sleep(8)
+            logger.info("Simply Wall St: Cloudflare clearance obtained.")
+
+            # Step 2: Resolve the canonical URL via GraphQL.
+            # SWS unique symbols follow the pattern "EXCHANGE:TICKER".
+            # We try common US exchange prefixes in priority order.
+            exchange_prefixes = ["NYSE", "NasdaqGS", "NasdaqGM", "NasdaqCM"]
+            canonical_url = None
+            for exchange in exchange_prefixes:
+                unique_symbol = f"{exchange}:{ticker.upper()}"
+                canonical_url = page.evaluate(
+                    """async (uniqueSymbol) => {
+                        try {
+                            const r = await fetch('/graphql', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    query: `{ Company(id: "${uniqueSymbol}") { canonicalURL } }`
+                                })
+                            });
+                            const data = await r.json();
+                            return data?.data?.Company?.canonicalURL || null;
+                        } catch(e) { return null; }
+                    }""",
+                    unique_symbol
+                )
+                if canonical_url:
+                    logger.info(f"Simply Wall St: Resolved {unique_symbol} -> {canonical_url}")
+                    break
+
+            if not canonical_url:
+                logger.warning(f"Simply Wall St: Could not resolve ticker {ticker.upper()} to a SWS URL.")
+                return "Stock not found on Simply Wall St"
+
+            # Step 3: Navigate to the stock page.
+            page.goto(f"https://simplywall.st{canonical_url}", timeout=60000, wait_until="domcontentloaded")
+
+            # Wait for the React Query state to be populated with analysis data.
+            page.wait_for_function(
+                """() => {
+                    try {
+                        return window.__REACT_QUERY_STATE__?.queries?.some(
+                            q => q?.state?.data?.data?.analysis?.data?.share_price !== undefined
+                        );
+                    } catch(e) { return false; }
+                }""",
+                timeout=30000
+            )
+
+            # Step 4: Extract share_price and intrinsic_discount from React Query state.
+            data = page.evaluate("""() => {
+                try {
+                    for (const query of window.__REACT_QUERY_STATE__.queries) {
+                        const a = query?.state?.data?.data?.analysis?.data;
+                        if (a && a.share_price !== undefined && a.intrinsic_discount !== undefined) {
+                            return { share_price: a.share_price, intrinsic_discount: a.intrinsic_discount };
+                        }
+                    }
+                } catch(e) {}
+                return null;
+            }""")
+
+            if data:
+                fair_value = data['share_price'] / (1 - data['intrinsic_discount'] / 100)
+                logger.info(
+                    f"Simply Wall St: share_price={data['share_price']}, "
+                    f"intrinsic_discount={data['intrinsic_discount']}%, "
+                    f"fair_value={fair_value:.2f}"
+                )
+                return f"${fair_value:.2f}"
+
+            logger.warning(f"Simply Wall St: Fair value data not found for {ticker}")
+            return "Fair value not found"
+        except Exception as e:
+            logger.error(f"Error fetching Simply Wall St data: {str(e)}")
+            return f"Error: {e}"
+        finally:
+            sws_browser.close()
 
     def close(self):
         """Closes the browser and stops the Playwright instance."""
@@ -263,6 +427,8 @@ def main():
                        help="Output only the numeric value from ValueInvesting.io.")
     parser.add_argument("-gf", "--gurufocus-only", action="store_true",
                        help="Output only the numeric value from GuruFocus.")
+    parser.add_argument("-sw", "--simplywallst-only", action="store_true",
+                       help="Output only the numeric value from Simply Wall St.")
     
     parser.add_argument("--debug", action="store_true",
                        help="Enable debug logging to show retrieval details (ignored in numeric-only or batch modes).")
@@ -281,7 +447,7 @@ def main():
         # Only show warnings and errors by default
         logging.basicConfig(level=logging.WARNING, format=log_format)
 
-    is_numeric_only_mode = args.alphaspread_only or args.valueinvesting_only or args.gurufocus_only
+    is_numeric_only_mode = args.alphaspread_only or args.valueinvesting_only or args.gurufocus_only or args.simplywallst_only
     is_batch_mode = args.input is not None
 
     # Initialize the scraper. It will be used in all modes.
@@ -294,7 +460,7 @@ def main():
             process_ticker_file_fair_value(args.input, args.output, scraper, debug=args.debug)
         elif args.ticker:
             # All single-ticker modes
-            if args.alphaspread_only or args.valueinvesting_only or args.gurufocus_only:
+            if args.alphaspread_only or args.valueinvesting_only or args.gurufocus_only or args.simplywallst_only:
                 # Numeric-only mode. Process in a fixed, predictable order.
                 outputs = []
                 if args.alphaspread_only:
@@ -317,6 +483,14 @@ def main():
                         delay = BASE_DELAY + random.uniform(0.5, 1.5)
                         time.sleep(delay)
                     result_text = scraper.get_fair_value_gurufocus(args.ticker)
+                    numeric_value = parse_value_from_string(result_text)
+                    outputs.append(f"{numeric_value if numeric_value is not None else ''}")
+
+                if args.simplywallst_only:
+                    if outputs:
+                        delay = BASE_DELAY + random.uniform(0.5, 1.5)
+                        time.sleep(delay)
+                    result_text = scraper.get_fair_value_simplywallst(args.ticker)
                     numeric_value = parse_value_from_string(result_text)
                     outputs.append(f"{numeric_value if numeric_value is not None else ''}")
                 
@@ -342,12 +516,21 @@ def main():
                 print(f"    Waiting {delay2:.2f}s before accessing GuruFocus...")
             time.sleep(delay2)
             gurufocus_result_text = scraper.get_fair_value_gurufocus(args.ticker)
-        
+
+            # Add another delay for Simply Wall St
+            delay3 = BASE_DELAY + random.uniform(0.5, 1.5)
+            if args.debug:
+                print(f"    Waiting {delay3:.2f}s before accessing Simply Wall St...")
+            time.sleep(delay3)
+            simplywallst_result_text = scraper.get_fair_value_simplywallst(args.ticker)
+
+            ticker_upper = args.ticker.upper()
+            ticker_lower = args.ticker.lower()
             results_data = [
-                {"source": "AlphaSpread", "text": alpha_result_text, "value": parse_value_from_string(alpha_result_text)},
-                {"source": "ValueInvesting.io", "text": valueinvesting_result_text, "value": parse_value_from_string(valueinvesting_result_text)},
-                {"source": "GuruFocus", "text": gurufocus_result_text, "value": parse_value_from_string(gurufocus_result_text)},
-                {"source": "Simply Wall St", "text": "(not yet implemented)", "value": None}
+                {"source": "AlphaSpread", "text": alpha_result_text, "value": parse_value_from_string(alpha_result_text), "url": f"https://www.alphaspread.com/security/nasdaq/{ticker_lower}/summary"},
+                {"source": "ValueInvesting.io", "text": valueinvesting_result_text, "value": parse_value_from_string(valueinvesting_result_text), "url": f"https://valueinvesting.io/{ticker_upper}/valuation/fair-value"},
+                {"source": "GuruFocus", "text": gurufocus_result_text, "value": parse_value_from_string(gurufocus_result_text), "url": f"https://www.gurufocus.com/stock/{ticker_upper}/dcf"},
+                {"source": "Simply Wall St", "text": simplywallst_result_text, "value": parse_value_from_string(simplywallst_result_text), "url": f"https://simplywall.st/search?q={ticker_upper}"},
             ]
         
             # --- Analyze and print results with colors ---
@@ -355,10 +538,13 @@ def main():
             min_val = min(valid_values) if valid_values else None
             max_val = max(valid_values) if valid_values else None
         
+            def hyperlink(url, text):
+                return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
+
             for result in results_data:
                 color = ''
                 display_text = f"{result['source']}: "
-                
+
                 if result['value'] is not None:
                     display_text += f"Fair Value = ${result['value']}"
                     # Only color if there are at least two different values to compare
@@ -372,8 +558,10 @@ def main():
                     display_text += result['text']
                 else:
                     display_text += result['text']
-        
+
                 print(f"{color}{display_text}{BColors.ENDC if color else ''}")
+                if result['url']:
+                    print(f"  {hyperlink(result['url'], result['url'])}")
         
             print()
     finally:
