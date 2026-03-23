@@ -434,6 +434,26 @@ def main():
      Reads tickers from an input file, fetches fair values for each, and saves
      results to a CSV file.
      {BColors.OKCYAN}USAGE:{BColors.ENDC} {BColors.OKGREEN}python get_fair_value.py -i tickers.txt -o values.csv{BColors.ENDC}
+
+{BColors.HEADER}About the Sources:{BColors.ENDC}
+  {BColors.BOLD}AlphaSpread{BColors.ENDC}
+     Uses a dual-model approach: DCF (Intrinsic) and Relative Valuation (Multiples).
+     Accuracy is considered {BColors.WARNING}Moderate{BColors.ENDC}.
+
+  {BColors.BOLD}ValueInvesting.io{BColors.ENDC}
+     Applies a heavy focus on DCF and WACC calculations. Accuracy is considered
+     {BColors.WARNING}Moderate{BColors.ENDC} but can be overly optimistic on growth stocks, i.e. tech stocks
+     where Terminal Value is 80% of the score.
+
+  {BColors.BOLD}GuruFocus{BColors.ENDC}
+     Uses multiple models: GF Value, Peter Lynch Fair Value, and Project FCF.
+     Accuracy is considered {BColors.OKGREEN}High{BColors.ENDC}. It is less prone to extreme automated DCF swings.
+
+  {BColors.BOLD}Simply Wall St{BColors.ENDC}
+     Uses a 2-Stage FCFE (Free Cash Flow to Equity) model. Accuracy is considered
+     {BColors.FAIL}Low to Moderate{BColors.ENDC} as it's criticized for being too optimistic. Because it is
+     fully automated, it frequently misses one-time accounting charges or structural
+     industry shifts.
 """
     
     parser = argparse.ArgumentParser(
