@@ -7,6 +7,7 @@ import time
 import sys
 import logging
 import csv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
@@ -96,18 +97,9 @@ class FairValueScraper:
         url = f"https://www.gurufocus.com/stock/{ticker.upper()}/dcf"
         page = self.context.new_page()
         try:
-            page.goto(url, timeout=60000)
-
-            # Handle potential cookie consent banner
-            try:
-                cookie_button_selector = 'button:has-text("Accept All")'
-                page.wait_for_selector(cookie_button_selector, timeout=5000)
-                page.click(cookie_button_selector)
-                logger.info("GuruFocus: Clicked 'Accept All' cookie button.")
-            except Exception:
-                logger.info("GuruFocus: Cookie consent banner not found or already handled.")
-
-            page.wait_for_load_state("networkidle", timeout=60000)
+            # __NUXT__ is server-side rendered, so domcontentloaded is sufficient —
+            # no need to wait for networkidle or dismiss the cookie banner.
+            page.goto(url, timeout=60000, wait_until="domcontentloaded")
 
             # Extract iv_dcf directly from the Nuxt.js server-side state.
             # The DOM's "Fair Value" element is not reliably hydrated, so we read
@@ -214,8 +206,12 @@ class FairValueScraper:
             page = sws_context.new_page()
 
             # Step 1: Load any SWS page to obtain Cloudflare clearance.
+            # Wait for the challenge URL to resolve rather than sleeping a fixed duration.
             page.goto("https://simplywall.st/stocks/us/market-cap-large", timeout=60000, wait_until="domcontentloaded")
-            time.sleep(8)
+            try:
+                page.wait_for_url(lambda url: "/challenge" not in url, timeout=20000)
+            except Exception:
+                pass  # No challenge page, or already resolved
             logger.info("Simply Wall St: Cloudflare clearance obtained.")
 
             # Step 2: Resolve the canonical URL via GraphQL.
@@ -294,6 +290,43 @@ class FairValueScraper:
         finally:
             sws_browser.close()
 
+    def fetch_all_parallel(self, ticker: str) -> dict[str, str | None]:
+        """Fetch fair values from all four sources concurrently.
+
+        Playwright's sync API is not thread-safe for shared objects, so each
+        worker thread gets its own isolated FairValueScraper instance (and thus
+        its own playwright/browser). The wall-clock time becomes roughly equal
+        to the slowest single source instead of the sum of all four.
+        """
+        sources = [
+            ("AlphaSpread",       "get_fair_value_alphaspread"),
+            ("ValueInvesting.io", "get_fair_value_valueinvesting_io"),
+            ("GuruFocus",         "get_fair_value_gurufocus"),
+            ("Simply Wall St",    "get_fair_value_simplywallst"),
+        ]
+
+        def run_isolated(method_name: str) -> str | None:
+            isolated = FairValueScraper(headless=True)
+            try:
+                return getattr(isolated, method_name)(ticker)
+            finally:
+                isolated.close()
+
+        results: dict[str, str | None] = {}
+        with ThreadPoolExecutor(max_workers=len(sources)) as executor:
+            future_to_source = {
+                executor.submit(run_isolated, method): source
+                for source, method in sources
+            }
+            for future in as_completed(future_to_source):
+                source = future_to_source[future]
+                try:
+                    results[source] = future.result()
+                except Exception as e:
+                    logger.error(f"Parallel fetch error for {source}: {e}")
+                    results[source] = f"Error: {e}"
+        return results
+
     def close(self):
         """Closes the browser and stops the Playwright instance."""
         self.browser.close()
@@ -312,38 +345,32 @@ def process_ticker_file_fair_value(input_file: str, output_file: str, scraper: F
     print(f"Writing results to: {BColors.OKCYAN}{output_file}{BColors.ENDC}")
     with open(output_file, "w", newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Ticker", "AlphaSpread", "ValueInvesting.io", "GuruFocus"]) # CSV Header
+        writer.writerow(["Ticker", "AlphaSpread", "ValueInvesting.io", "GuruFocus", "Simply Wall St"])
         for i, ticker in enumerate(tickers):
             print(f"  Processing {ticker.upper()}...")
-            alpha_result_text = scraper.get_fair_value_alphaspread(ticker)
-            # Add a human-like, randomized delay between requests
-            delay = BASE_DELAY + random.uniform(0.5, 1.5)
-            if debug:
-                print(f"    Waiting {delay:.2f}s before accessing ValueInvesting.io...")
-            time.sleep(delay)
-            valueinvesting_result_text = scraper.get_fair_value_valueinvesting_io(ticker)
+            results = scraper.fetch_all_parallel(ticker)
 
-            # Add another delay for GuruFocus
-            delay2 = BASE_DELAY + random.uniform(0.5, 1.5)
-            if debug:
-                print(f"    Waiting {delay2:.2f}s before accessing GuruFocus...")
-            time.sleep(delay2)
-            gurufocus_result_text = scraper.get_fair_value_gurufocus(ticker)
+            alpha_result_text       = results.get("AlphaSpread")
+            valueinvesting_result_text = results.get("ValueInvesting.io")
+            gurufocus_result_text   = results.get("GuruFocus")
+            simplywallst_result_text = results.get("Simply Wall St")
 
-            alpha_value = parse_value_from_string(alpha_result_text)
-            valueinvesting_value = parse_value_from_string(valueinvesting_result_text)
-            gurufocus_value = parse_value_from_string(gurufocus_result_text)
+            def csv_val(text):
+                v = parse_value_from_string(text)
+                return str(v) if v is not None else ""
 
-            # Format for CSV: empty string if value is None
-            alpha_csv_value = str(alpha_value) if alpha_value is not None else ""
-            valueinvesting_csv_value = str(valueinvesting_value) if valueinvesting_value is not None else ""
-            gurufocus_csv_value = str(gurufocus_value) if gurufocus_value is not None else ""
-
-            writer.writerow([ticker.upper(), alpha_csv_value, valueinvesting_csv_value, gurufocus_csv_value])
+            writer.writerow([
+                ticker.upper(),
+                csv_val(alpha_result_text),
+                csv_val(valueinvesting_result_text),
+                csv_val(gurufocus_result_text),
+                csv_val(simplywallst_result_text),
+            ])
             print(f"    AlphaSpread: {alpha_result_text or 'Not found'}")
             print(f"    ValueInvesting.io: {valueinvesting_result_text or 'Not found'}")
             print(f"    GuruFocus: {gurufocus_result_text or 'Not found'}")
-            # Add a small, randomized delay between processing each ticker
+            print(f"    Simply Wall St: {simplywallst_result_text or 'Not found'}")
+            # Brief pause between tickers to avoid hammering sites back-to-back
             if i < len(tickers) - 1:
                 time.sleep(random.uniform(1.0, 2.5))
 
@@ -469,27 +496,16 @@ def main():
                     outputs.append(f"{numeric_value if numeric_value is not None else ''}")
                 
                 if args.valueinvesting_only:
-                    # Add a delay if we also fetched from the other site
-                    if outputs:
-                        delay = BASE_DELAY + random.uniform(0.5, 1.5)
-                        time.sleep(delay)
                     result_text = scraper.get_fair_value_valueinvesting_io(args.ticker)
                     numeric_value = parse_value_from_string(result_text)
                     outputs.append(f"{numeric_value if numeric_value is not None else ''}")
-                
+
                 if args.gurufocus_only:
-                    # Add a delay if we also fetched from other sites
-                    if outputs:
-                        delay = BASE_DELAY + random.uniform(0.5, 1.5)
-                        time.sleep(delay)
                     result_text = scraper.get_fair_value_gurufocus(args.ticker)
                     numeric_value = parse_value_from_string(result_text)
                     outputs.append(f"{numeric_value if numeric_value is not None else ''}")
 
                 if args.simplywallst_only:
-                    if outputs:
-                        delay = BASE_DELAY + random.uniform(0.5, 1.5)
-                        time.sleep(delay)
                     result_text = scraper.get_fair_value_simplywallst(args.ticker)
                     numeric_value = parse_value_from_string(result_text)
                     outputs.append(f"{numeric_value if numeric_value is not None else ''}")
@@ -499,30 +515,12 @@ def main():
 
             # Full report mode (default single-ticker mode)
             print(f"\nFetching fair value estimates for: {BColors.BOLD}{args.ticker.upper()}{BColors.ENDC}\n")
-        
-            # --- Fetch and process results ---
-            alpha_result_text = scraper.get_fair_value_alphaspread(args.ticker)
 
-            # Add a human-like, randomized delay
-            delay = BASE_DELAY + random.uniform(0.5, 1.5)
-            if args.debug:
-                print(f"    Waiting {delay:.2f}s before accessing ValueInvesting.io...")
-            time.sleep(delay)
-            valueinvesting_result_text = scraper.get_fair_value_valueinvesting_io(args.ticker)
-
-            # Add another delay for GuruFocus
-            delay2 = BASE_DELAY + random.uniform(0.5, 1.5)
-            if args.debug:
-                print(f"    Waiting {delay2:.2f}s before accessing GuruFocus...")
-            time.sleep(delay2)
-            gurufocus_result_text = scraper.get_fair_value_gurufocus(args.ticker)
-
-            # Add another delay for Simply Wall St
-            delay3 = BASE_DELAY + random.uniform(0.5, 1.5)
-            if args.debug:
-                print(f"    Waiting {delay3:.2f}s before accessing Simply Wall St...")
-            time.sleep(delay3)
-            simplywallst_result_text = scraper.get_fair_value_simplywallst(args.ticker)
+            results = scraper.fetch_all_parallel(args.ticker)
+            alpha_result_text        = results.get("AlphaSpread")
+            valueinvesting_result_text = results.get("ValueInvesting.io")
+            gurufocus_result_text    = results.get("GuruFocus")
+            simplywallst_result_text = results.get("Simply Wall St")
 
             ticker_upper = args.ticker.upper()
             ticker_lower = args.ticker.lower()
