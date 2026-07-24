@@ -2,9 +2,10 @@
 """Fetch, calculate, and track secondary-market Treasury bond pricing by CUSIP.
 
 Default mode fetches a live quote (coupon, maturity, bid/ask/last, yield) for a
-CUSIP from Webull, cross-checks the coupon against Treasury's own auction record,
-calculates Yield to Worst, and -- after showing you the entry and asking for
-confirmation -- appends it to a dated history in a local JSON file
+CUSIP from Webull, cross-checks the coupon against Treasury's own auction record
+(falling back to this CUSIP's own prior saved coupon for non-Treasury securities
+Treasury has no record of), calculates Yield to Worst, and -- after showing you
+the entry and asking for confirmation -- appends it to a dated history in a local JSON file
 (data/json/treasuries_secondary_market.json). Guided manual entry (--manual) and
 raw copy-paste entry (--copypaste) are available when no fetch source has data
 for a CUSIP. See fetch_add(), interactive_add(), and parse_input() respectively.
@@ -447,20 +448,30 @@ SOURCE_MODULES = {
     "finra": finra_bond_fetcher,
 }
 
-def _fetch_bond_entry(cusip, source="webull"):
+def _fetch_bond_entry(cusip, source="webull", prior_entries=None):
     """Fetch coupon/maturity/price for cusip from source and cross-check the coupon
     against Treasury's own auction record. Never raises for expected failure modes
     (network error, no record, no price, coupon mismatch) -- those come back as a
     None entry plus an explanatory note instead, so this is safe to call from both
     an interactive prompt and an unattended batch job.
 
+    prior_entries is this CUSIP's existing saved history (data.get(cusip, [])).
+    Treasury's auction API has no record at all for non-Treasury securities (e.g.
+    a corporate bond tracked alongside Treasuries in the same file), so that gap
+    can never be closed by retrying. When Treasury has no record, the fetched
+    coupon is instead checked against the most recent prior saved entry: if it
+    matches, that's treated as the independent confirmation instead, since the
+    value was already reviewed once when it was first saved. A CUSIP with no
+    prior history still can't be verified this way and stays unclean.
+
     Returns {"entry": dict|None, "clean": bool, "notes": [(level, message), ...]}.
     entry is the ready-to-save Coupon/Maturity/Price/YTW/Date dict, or None if no
     usable price could be determined. clean is True only when the fetch succeeded,
     a price was found, AND the coupon was independently confirmed against Treasury's
-    auction record -- an unverified (no Treasury record) or mismatched coupon marks
-    clean=False even though entry may still be populated, so callers that want to
-    auto-save unattended (see fetch_all_owned) can require clean=True.
+    auction record (or, absent one, against this CUSIP's own prior saved coupon) --
+    an unverified or mismatched coupon marks clean=False even though entry may
+    still be populated, so callers that want to auto-save unattended (see
+    fetch_all_owned) can require clean=True.
     """
     fetcher = SOURCE_MODULES[source]
     notes = []
@@ -501,9 +512,25 @@ def _fetch_bond_entry(cusip, source="webull"):
         else:
             notes.append(("info", f"Coupon verified against Treasury's own auction record: {coupon}%"))
     else:
-        notes.append(("warn", f"Could not verify coupon against Treasury (no auction record found) -- "
-                               f"using {source}'s reported coupon: {coupon}%. Double-check this value."))
-        clean = False
+        prior_coupon = None
+        for prior in reversed(prior_entries or []):
+            if "Coupon" in prior:
+                prior_coupon = float(prior["Coupon"])
+                break
+
+        if prior_coupon is not None and abs(prior_coupon - coupon) <= COUPON_MATCH_TOLERANCE_PCT:
+            notes.append(("info", f"No Treasury auction record for {cusip} (likely not a Treasury security) -- "
+                                   f"coupon matches this CUSIP's previously saved value: {coupon}%."))
+        elif prior_coupon is not None:
+            notes.append(("error", f"Coupon mismatch: {source} reports {coupon}%, but this CUSIP's previously "
+                                    f"saved coupon is {prior_coupon}%. Using the previously saved figure."))
+            coupon = prior_coupon
+            clean = False
+        else:
+            notes.append(("warn", f"Could not verify coupon against Treasury (no auction record found) and no "
+                                   f"prior saved entry to compare against -- using {source}'s reported coupon: "
+                                   f"{coupon}%. Double-check this value."))
+            clean = False
 
     notes.append(("info", f"{source} reference data -- issuer: {record.get('issuerName', 'n/a')}, "
                            f"coupon: {coupon}%, maturity: {maturity_str}"))
@@ -554,7 +581,7 @@ def fetch_add(data, cusip=None, source="webull"):
                 return
 
     print(f"{CYAN}Fetching {cusip} from {source}...{RESET}")
-    result = _fetch_bond_entry(cusip, source)
+    result = _fetch_bond_entry(cusip, source, prior_entries=data.get(cusip, []))
     _print_notes(result["notes"])
 
     new_entry = result["entry"]
@@ -582,11 +609,12 @@ def fetch_all_owned(data, source="webull"):
 
     "Owned" means a CUSIP with a _comment entry starting with "paid" (the same
     marker interactive_add() uses to highlight owned bonds). For each one: skip
-    if today's entry already exists; otherwise fetch via _fetch_bond_entry and
-    save ONLY if clean=True (price found and coupon independently confirmed
-    against Treasury) -- anything else (fetch error, no price, unverified or
-    mismatched coupon) is skipped and reported in the summary for manual review
-    via `--CUSIP <cusip>`, rather than guessed at.
+    if today's entry already exists; otherwise fetch via _fetch_bond_entry (passing
+    this CUSIP's prior saved entries, so non-Treasury securities with no Treasury
+    auction record can still be verified against their own history) and save ONLY
+    if clean=True -- anything else (fetch error, no price, unverified or mismatched
+    coupon) is skipped and reported in the summary for manual review via
+    `--CUSIP <cusip>`, rather than guessed at.
 
     Intended for unattended/scheduled runs -- see --daily and the LAUNCHD section
     of --help. Saves incrementally after each CUSIP so a crash partway through
@@ -611,7 +639,7 @@ def fetch_all_owned(data, source="webull"):
             skipped.append((cusip, "already up to date"))
             continue
 
-        result = _fetch_bond_entry(cusip, source)
+        result = _fetch_bond_entry(cusip, source, prior_entries=data[cusip])
         _print_notes(result["notes"], indent="  ")
 
         if result["entry"] and result["clean"]:
@@ -681,7 +709,9 @@ def print_help():
     print("                     See finra_bond_fetcher.py's module docstring for the full story.")
     print("  Every fetch cross-checks the coupon against Treasury's own auction record")
     print("  (api.fiscaldata.treasury.gov) regardless of source, and flags any mismatch")
-    print("  instead of silently trusting either source.")
+    print("  instead of silently trusting either source. For non-Treasury securities")
+    print("  Treasury has no record of, the check falls back to this CUSIP's own prior")
+    print("  saved coupon instead.")
 
     print(f"\n{BOLD}{CYAN}DATA FILE{RESET}")
     print(f"  {os.path.relpath(DATA_FILE, SCRIPT_DIR)} (relative to this script)")
@@ -718,9 +748,11 @@ def print_help():
     print("  - Interactive modes show every entry for review before saving -- nothing is")
     print("    written to the JSON file without an explicit y/N confirmation. --daily")
     print("    saves automatically, but ONLY when the coupon was independently verified")
-    print("    against Treasury's own auction record; anything unverified, mismatched,")
-    print("    or fetch-failed is skipped and listed in the run summary for you to")
-    print("    review by hand (e.g. bond_market_analyzer.py --CUSIP <cusip>).")
+    print("    against Treasury's own auction record (or, for non-Treasury securities")
+    print("    Treasury has no record of, against this CUSIP's own prior saved coupon);")
+    print("    anything unverified, mismatched, or fetch-failed is skipped and listed in")
+    print("    the run summary for you to review by hand (e.g. bond_market_analyzer.py")
+    print("    --CUSIP <cusip>).")
     print("  - Duplicate entries for the same CUSIP + date are detected and skipped.")
     print()
 
