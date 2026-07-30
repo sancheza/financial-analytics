@@ -23,8 +23,25 @@ except ImportError:
     sys.exit(1)
 
 
-VERSION = "1.3.0" # Added --yield (solve price from target yield)
+VERSION = "1.3.1" # Added plausibility checks with "did you mean" hints
 SETTLEMENT_LAG_DAYS = 1
+
+# Plausible ranges for sanity-checking inputs (catches price/yield mix-ups, typos, etc.)
+COUPON_RANGE_PCT = (0.0, 20.0)
+YIELD_RANGE_PCT = (0.0, 25.0)
+PRICE_RANGE = (1.0, 300.0)
+
+
+def _check_plausible(label: str, value: float, bounds: Tuple[float, float], unit: str = "", hint: Optional[str] = None) -> None:
+    """Raises ValueError with an optional 'did you mean' hint if value falls outside a plausible range."""
+    lo, hi = bounds
+    if lo <= value <= hi:
+        return
+    msg = f"{label} {value:.3f}{unit} looks implausible (expected {lo:.0f}{unit}-{hi:.0f}{unit})."
+    if hint:
+        msg += f" {hint}"
+    raise ValueError(msg)
+
 
 def print_usage():
     """Prints a short usage line for error conditions (full manual is reserved for -h/--help)."""
@@ -119,6 +136,9 @@ def print_help():
     print(f"""
 {header('NOTES')}
   • {cmd('--yield')} and {cmd('--batch')} are mutually exclusive.
+  • Coupon, price, and target yield are sanity-checked against plausible ranges
+    (coupon/yield 0-25%, price 1-300); implausible values are rejected with a
+    "did you mean" hint rather than silently producing a bogus result.
   • Settlement is always T+1 from today, so results shift slightly day to day.
   • Benchmark comparison and grading require network access to fetch live Treasury
     auction yields; without it, single-bond analysis will fail (batch rows will be
@@ -710,6 +730,8 @@ def main():
                         if maturity < datetime.date.today():
                              raise ValueError(f"Maturity date {maturity_str} is in the past.")
                         if price <= 0: raise ValueError("Price must be positive.")
+                        _check_plausible("Coupon rate", coupon, COUPON_RANGE_PCT, unit="%")
+                        _check_plausible("Price", price, PRICE_RANGE)
 
                         # --- Conditional Analyzing Print ---
                         if debug: print(f"Analyzing: C={coupon:.3f}, M={maturity_str}, P={price:.3f}")
@@ -825,6 +847,8 @@ def main():
             # --- Input Validation (Simplified using try/except float/date) ---
             try: coupon = float(coupon_str); assert coupon >= 0
             except: raise ValueError(f"Invalid coupon rate: '{coupon_str}'")
+            _check_plausible("Coupon rate", coupon, COUPON_RANGE_PCT, unit="%",
+                              hint="Check the value and argument order (<coupon> <maturity> <price_or_yield>).")
 
             try: maturity = datetime.datetime.strptime(maturity_str, "%m/%d/%Y").date(); # assert maturity > datetime.date.today() # Allow today
             except: raise ValueError(f"Invalid maturity date: '{maturity_str}'")
@@ -832,18 +856,27 @@ def main():
             if args.solve_yield:
                 try: target_yield = float(third_str); assert target_yield >= 0
                 except: raise ValueError(f"Invalid target yield: '{third_str}'")
+                _check_plausible("Target yield", target_yield, YIELD_RANGE_PCT, unit="%",
+                                  hint=f"Did you mean to drop --yield and pass this as a price? e.g. bond_return_calc.py {coupon_str} {maturity_str} {third_str}")
                 price = price_from_yield(target_yield, coupon, maturity)
                 print(color_header("Solved Price from Yield"))
                 print(f"Target Yield: {color_value(f'{target_yield:.3f}%')} -> Clean Price: {color_value(f'{price:.4f}')}\n")
             else:
                 try: price = float(third_str); assert price > 0
                 except: raise ValueError(f"Invalid price: '{third_str}'")
+                _check_plausible("Price", price, PRICE_RANGE,
+                                  hint=f"Did you mean to add --yield and pass this as a target yield? e.g. bond_return_calc.py --yield {coupon_str} {maturity_str} {third_str}")
             # --- End Input Validation ---
 
             # --- Core Calculations ---
             result = analyze_bond(coupon, maturity, price, debug) # Call analyze_bond
 
             if result:
+                if not args.solve_yield:
+                    # A valid-looking price can still imply an absurd yield (e.g. price/yield swapped
+                    # by mistake); catch that here since price alone isn't enough to detect it.
+                    _check_plausible("Implied yield", result.get('ytm_pct', 0.0), YIELD_RANGE_PCT, unit="%",
+                                      hint=f"Did you mean to use --yield and pass this value as a target yield? e.g. bond_return_calc.py --yield {coupon_str} {maturity_str} {third_str}")
                 # --- Print Results using the returned dictionary ---
                 print(color_header("\nBond Details"))
                 # Ensure maturity is formatted correctly if it's a date object
