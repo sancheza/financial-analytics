@@ -23,15 +23,26 @@ except ImportError:
     sys.exit(1)
 
 
-VERSION = "1.2.3" # Updated version
+VERSION = "1.3.0" # Added --yield (solve price from target yield)
 SETTLEMENT_LAG_DAYS = 1
 
+def print_usage():
+    """Prints a short usage line for error conditions (full manual is reserved for -h/--help)."""
+    print("Usage:")
+    print("  bond_return_calc.py <coupon> <maturity_MM/DD/YYYY> <price>")
+    print("  bond_return_calc.py --yield <coupon> <maturity_MM/DD/YYYY> <target_yield>")
+    print("  bond_return_calc.py --batch <path_to_csv_file>")
+    print("Try 'bond_return_calc.py --help' for full documentation.")
+
+
 def print_help():
+    """Prints the full CLI manual: overview, usage examples, methodology, and an options table."""
     # ANSI escape codes for formatting
     BOLD = "\033[1m"
     CYAN = "\033[96m"
     GOLD = "\033[38;5;220m"
     GREY = "\033[90m"
+    GREEN = "\033[92m"
     RESET = "\033[0m"
 
     # Helper for section headers
@@ -47,66 +58,80 @@ def print_help():
         return f"{GREY}{text}{RESET}"
 
     print(f"""
-{header('bond_return_calc.py')} - A comprehensive secondary market bond analysis tool.
+{header('bond_return_calc.py')} {GREY}v{VERSION}{RESET} - A comprehensive secondary market bond analysis tool.
 
 {header('OVERVIEW')}
   This script provides a detailed analysis for a secondary market bond, calculating
   key financial metrics and comparing its yield against a relevant Treasury benchmark.
-  It can be run on a single bond or in batch mode on a CSV file.
+  It can run on a single bond, solve price from a target yield, or batch-process a CSV.
 
 {header('USAGE EXAMPLES')}
-  {BOLD}Single Bond Analysis:{RESET}
+  {BOLD}Single Bond Analysis (from price):{RESET}
     {cmd('bond_return_calc.py')} {placeholder('<coupon> <maturity> <price>')}
     {GREY}e.g., {cmd('bond_return_calc.py 4.625 01/31/2025 99.75')}{RESET}
+
+  {BOLD}Solve Price from a Target Yield:{RESET}
+    {cmd('bond_return_calc.py --yield')} {placeholder('<coupon> <maturity> <target_yield>')}
+    {GREY}e.g., {cmd('bond_return_calc.py --yield 5.0 05/15/2046 5.30')}{RESET}
 
   {BOLD}Batch Processing from CSV:{RESET}
     {cmd('bond_return_calc.py --batch')} {placeholder('<path_to_csv_file>')}
     {GREY}e.g., {cmd('bond_return_calc.py --batch ./my_bonds.csv')}{RESET}
 
 {header('HOW IT WORKS')}
-  This tool performs several calculations to provide a holistic view of a bond's value
-  and risk profile.
-
   {BOLD}1. Core Calculations:{RESET}
-    • {BOLD}Yield to Maturity (YTM):{RESET} Calculated using the standard Bond Equivalent Yield (BEY)
-      convention, which assumes semi-annual compounding and an Actual/Actual day count.
-      Settlement is assumed to be the next business day (T+1).
-    • {BOLD}Risk Metrics:{RESET} Computes Modified Duration and Convexity to quantify the bond's
-      price sensitivity to interest rate changes.
+    • {BOLD}Yield to Maturity (YTM):{RESET} Standard Bond Equivalent Yield (BEY) convention —
+      semi-annual compounding, Actual/Actual day count, T+1 settlement.
+    • {BOLD}Price from Yield:{RESET} Closed-form present value of remaining coupons + principal,
+      discounted at the target yield/2 per period (the exact inverse of the YTM solve).
+    • {BOLD}Risk Metrics:{RESET} Modified Duration and Convexity quantify price sensitivity to
+      interest rate changes.
 
   {BOLD}2. Benchmark Comparison & Data Source:{RESET}
-    • {BOLD}Data Source:{RESET} The script fetches {BOLD}live U.S. Treasury auction yield data{RESET} to establish
-      a risk-free benchmark. This ensures the comparison is timely and relevant.
-    • {BOLD}Interpolation:{RESET} A bond's maturity rarely matches a standard Treasury's exactly.
-      To create a precise comparison, the script identifies the two closest Treasury
-      maturities (e.g., 5-Year and 7-Year) and {BOLD}linearly interpolates{RESET} a benchmark yield
-      specific to the bond's exact time-to-maturity.
-    • {BOLD}Spread:{RESET} The output shows the "spread" – the difference in basis points (1/100th
-      of a percent) between the bond's YTM and the interpolated Treasury benchmark.
+    • {BOLD}Data Source:{RESET} Fetches {BOLD}live U.S. Treasury auction yield data{RESET} as a
+      risk-free benchmark.
+    • {BOLD}Interpolation:{RESET} Identifies the two closest standard Treasury maturities
+      (e.g., 5-Year and 7-Year) and {BOLD}linearly interpolates{RESET} a benchmark yield specific
+      to the bond's exact time-to-maturity.
+    • {BOLD}Spread:{RESET} Difference in basis points (1/100th of a percent) between the bond's
+      YTM and the interpolated Treasury benchmark.
 
   {BOLD}3. Grading System:{RESET}
-    • A comparative grade (A+ to F) is assigned based on the calculated spread.
-    • The grading thresholds are adjusted for the bond's maturity (short, medium,
-      or long-term), as longer-term bonds typically require a higher spread to
-      compensate for their increased risk.
+    • A comparative grade ({GREEN}A+{RESET} to {cmd('F')}) is assigned based on the spread, with
+      thresholds adjusted for maturity (short/medium/long-term), since longer-term
+      bonds typically need a wider spread to compensate for added risk.
 
 {header('OPTIONS')}
-  {BOLD}Positional Arguments (for single bond mode):{RESET}
-    {placeholder('<coupon>')}          Bond coupon rate (e.g., 4.625)
-    {placeholder('<maturity>')}        Bond maturity date in MM/DD/YYYY format
-    {placeholder('<price>')}           Bond clean price (e.g., 99.75)
+  {BOLD}Positional (single bond mode):{RESET}
+    {placeholder('<coupon>')}          Bond coupon rate, percent (e.g., 4.625)
+    {placeholder('<maturity>')}        Bond maturity date, MM/DD/YYYY
+    {placeholder('<price>')}           Bond clean price (e.g., 99.75) — omit if using {cmd('--yield')}
+    {placeholder('<target_yield>')}    Target yield, percent — only with {cmd('--yield')} (e.g., 5.30)
+""")
+    options_table = [
+        [cmd('--yield'), "Treat the 3rd positional argument as a target yield (%) and\nsolve for clean price instead of analyzing from price."],
+        [cmd('-b, --batch FILE'), "Batch-process bonds from a CSV. Fuzzy-matches 'Coupon',\n'Maturity', and 'Price' columns by header name."],
+        [cmd('--debug'), "Verbose output: benchmark API calls, per-row batch details,\nand an internal calculation dump."],
+        [cmd('-h, --help'), "Show this help message and exit."],
+        [cmd('-v, --version'), "Show version information and exit."],
+    ]
+    print(tabulate(options_table, tablefmt="plain"))
+    print(f"""
+{header('NOTES')}
+  • {cmd('--yield')} and {cmd('--batch')} are mutually exclusive.
+  • Settlement is always T+1 from today, so results shift slightly day to day.
+  • Benchmark comparison and grading require network access to fetch live Treasury
+    auction yields; without it, single-bond analysis will fail (batch rows will be
+    skipped with an error in {cmd('--debug')} mode).
 
-  {BOLD}Optional Arguments:{RESET}
-    {cmd('-b, --batch FILE')}   Path to a CSV file for batch processing. The script uses
-                        fuzzy matching to find 'Coupon', 'Maturity', and 'Price' columns.
-    {cmd('-h, --help')}         Show this detailed help message and exit.
-    {cmd('-v, --version')}      Show the script version and exit.
-    {cmd('--debug')}            Enable verbose output for debugging, including API calls and
-                        row-by-row processing details.
+{header('REQUIREMENTS')}
+  scipy, python-dateutil, thefuzz, tabulate
+  {GREY}pip install scipy python-dateutil thefuzz tabulate{RESET}
 """)
 
 
 def print_version():
+    """Prints the script name and version string."""
     print(f"bond_return_calc.py version {VERSION}")
 
 
@@ -190,10 +215,11 @@ def calculate_actual_actual_days(start_date: datetime.date, end_date: datetime.d
     """Calculates days using Actual/Actual convention."""
     return (end_date - start_date).days
 
-def calculate_ytm_bey(clean_price: float, coupon_rate: float, maturity_date: datetime.date, face_value: float = 100) -> Tuple[float, float, List[Tuple[datetime.date, float]], float]:
+def _prepare_bond_cashflows(coupon_rate: float, maturity_date: datetime.date, face_value: float = 100) -> Tuple[List[Tuple[datetime.date, float]], float, float]:
     """
-    Calculates Yield to Maturity using standard Bond Equivalent Yield (BEY) conventions.
-    Returns: Tuple[ytm_percentage, dirty_price, cash_flows, w_factor]
+    Shared setup for price<->yield calcs: future cash flows, accrued interest,
+    and the fractional-period factor w, as of T+1 settlement from today.
+    Returns: (cash_flows, accrued_interest, w)
     """
     today = datetime.date.today()
     settlement_date = today + datetime.timedelta(days=SETTLEMENT_LAG_DAYS)
@@ -204,12 +230,9 @@ def calculate_ytm_bey(clean_price: float, coupon_rate: float, maturity_date: dat
     future_coupon_dates = [d for d in all_coupon_dates if d > settlement_date]
     if not future_coupon_dates:
         # Handle case where bond matures before or on settlement
-        # Check if maturity is on settlement date
         if maturity_date == settlement_date:
-             # Treat as zero-coupon for remaining calculations if needed, or raise specific error
-             # For YTM, if price matches face value, yield is ambiguous/zero. If not, it's complex.
-             # Let's raise an error for simplicity as YTM is ill-defined here.
-             raise ValueError("Bond settles on maturity date. YTM calculation is not applicable.")
+             # Yield/price is ill-defined when settlement lands exactly on maturity.
+             raise ValueError("Bond settles on maturity date. Calculation is not applicable.")
         else:
              raise ValueError("Bond has already matured or settles after maturity.")
 
@@ -224,18 +247,28 @@ def calculate_ytm_bey(clean_price: float, coupon_rate: float, maturity_date: dat
 
     if days_in_period == 0: # Avoid division by zero if settlement is on coupon date
         accrued_interest = 0.0
-        w = 0 # Settlement is on coupon date
+        w = 0.0 # Settlement is on coupon date
     else:
         accrued_interest = coupon_amt * (days_accrued / days_in_period)
         w = days_settle_to_next / days_in_period # Fractional period factor
 
-    # 3. Calculate Dirty Price
-    dirty_price = clean_price + accrued_interest
-
-    # 4. Define the Pricing Function for the Solver
     cash_flows = [(d, coupon_amt) for d in future_coupon_dates]
     cash_flows[-1] = (cash_flows[-1][0], cash_flows[-1][1] + face_value) # Add principal
 
+    return cash_flows, accrued_interest, w
+
+
+def calculate_ytm_bey(clean_price: float, coupon_rate: float, maturity_date: datetime.date, face_value: float = 100) -> Tuple[float, float, List[Tuple[datetime.date, float]], float]:
+    """
+    Calculates Yield to Maturity using standard Bond Equivalent Yield (BEY) conventions.
+    Returns: Tuple[ytm_percentage, dirty_price, cash_flows, w_factor]
+    """
+    cash_flows, accrued_interest, w = _prepare_bond_cashflows(coupon_rate, maturity_date, face_value)
+
+    # Calculate Dirty Price
+    dirty_price = clean_price + accrued_interest
+
+    # Define the Pricing Function for the Solver
     def bond_price_func(yield_rate):
         pv = 0.0
         for i, (cf_date, cf_amount) in enumerate(cash_flows):
@@ -243,7 +276,7 @@ def calculate_ytm_bey(clean_price: float, coupon_rate: float, maturity_date: dat
             pv += cf_amount / discount_factor
         return pv - dirty_price
 
-    # 5. Solve for Yield
+    # Solve for Yield
     initial_guess = (coupon_rate / 100.0) / (clean_price / face_value)
     try:
         ytm_result_decimal = newton(bond_price_func, initial_guess, tol=1e-8, maxiter=100)
@@ -256,6 +289,17 @@ def calculate_ytm_bey(clean_price: float, coupon_rate: float, maturity_date: dat
     # Return YTM, dirty price, cash flows, and w for duration/convexity
     return ytm_result_decimal * 100, dirty_price, cash_flows, w
 
+
+def price_from_yield(target_yield_pct: float, coupon_rate: float, maturity_date: datetime.date, face_value: float = 100) -> float:
+    """
+    Inverse of calculate_ytm_bey: computes the clean price for a given target yield (%).
+    Uses the same PV-of-cash-flows formula directly (closed-form, no solver needed).
+    """
+    cash_flows, accrued_interest, w = _prepare_bond_cashflows(coupon_rate, maturity_date, face_value)
+    y = target_yield_pct / 100.0
+    dirty_price = sum(cf_amount / ((1 + y / 2) ** (i + w)) for i, (_, cf_amount) in enumerate(cash_flows))
+    return dirty_price - accrued_interest
+
 # --- End of YTM Calculation Logic ---
 
 # --- Start of Duration/Convexity Calculation ---
@@ -263,6 +307,7 @@ def calculate_duration_convexity(ytm_decimal: float, dirty_price: float, cash_fl
     """
     Calculates Modified Duration and Convexity for a bond.
     Assumes semi-annual compounding (k=2).
+    Returns: Tuple[modified_duration_years, convexity] (convexity in periods^2, not annualized).
     """
     k = 2.0 # Compounding frequency (semi-annual)
     y = ytm_decimal # YTM as a decimal
@@ -360,7 +405,9 @@ def _fetch_single_yield(duration_code: str, debug: bool) -> Optional[float]:
 def get_comparable_yield(maturity_date: datetime.date, debug: bool = False) -> Tuple[str, float, Optional[float], Optional[float]]:
     """
     Calculates a comparable benchmark yield by interpolating between
-    the two closest standard Treasury maturities. Returns the yields used.
+    the two closest standard Treasury maturities (2Y-30Y). Falls back to the
+    single closest maturity if interpolation data is unavailable.
+    Returns: Tuple[label, yield_decimal, lower_bound_decimal_or_None, upper_bound_decimal_or_None]
     """
     today = datetime.date.today()
     years_remaining = (maturity_date - today).days / 365.25
@@ -479,6 +526,11 @@ def assign_grade(bond_ytm: float, benchmark: float, years_to_maturity: float) ->
 
 
 def analyze_bond(coupon: float, maturity: datetime.date, price: float, debug: bool) -> Optional[dict]:
+    """
+    Orchestrates a full single-bond analysis from a clean price: YTM, duration,
+    convexity, projected return, interpolated Treasury benchmark, and grade.
+    Returns a result dict (see keys below), or None if any calculation step fails.
+    """
     try:
         # Calculate YTM, get necessary components for Duration/Convexity
         ytm_pct, dirty_price_calc, cash_flows_calc, w_factor_calc = calculate_ytm_bey(price, coupon, maturity)
@@ -553,8 +605,9 @@ def main():
         description="Evaluates secondary market bonds.",
         add_help=False # Use custom help print
     )
-    parser.add_argument('details', nargs='*', help='<coupon> <maturity_MM/DD/YYYY> <price>')
+    parser.add_argument('details', nargs='*', help='<coupon> <maturity_MM/DD/YYYY> <price_or_yield>')
     parser.add_argument('--batch', '-b', type=str, help='Path to CSV file for batch processing (E*TRADE export format expected).')
+    parser.add_argument('--yield', dest='solve_yield', action='store_true', help='Treat the third positional argument as a target yield (%%) and solve for price instead.')
     parser.add_argument('--debug', action='store_true', help='Enable verbose API and filtering output')
     parser.add_argument('-h', '--help', action='store_true', help='Show this help message')
     parser.add_argument('-v', '--version', action='store_true', help='Show version information')
@@ -565,6 +618,15 @@ def main():
 
     args = parser.parse_args()
     debug = args.debug
+
+    # --- Validate Flag Combinations / Arg Counts Up Front ---
+    if args.solve_yield and args.batch:
+        print("Error: --yield cannot be combined with --batch.", file=sys.stderr)
+        print_usage(); sys.exit(1)
+    if args.solve_yield and not (args.details and len(args.details) == 3):
+        print(f"Error: --yield requires exactly 3 arguments: <coupon> <maturity> <target_yield> (got {len(args.details)}).", file=sys.stderr)
+        print_usage(); sys.exit(1)
+    # --- End Validation ---
 
     # --- Output Formatting Helpers ---
     RED = "\033[91m"; GREEN = "\033[92m"; ORANGE = "\033[38;5;208m"; GOLD = "\033[38;5;220m"; CYAN = "\033[96m"; RESET = "\033[0m"
@@ -757,7 +819,7 @@ def main():
     elif args.details and len(args.details) == 3:
         # --- Single Bond Mode ---
         # --- Argument Parsing and Initial Validation ---
-        coupon_str, maturity_str, price_str = args.details
+        coupon_str, maturity_str, third_str = args.details
 
         try:
             # --- Input Validation (Simplified using try/except float/date) ---
@@ -767,8 +829,15 @@ def main():
             try: maturity = datetime.datetime.strptime(maturity_str, "%m/%d/%Y").date(); # assert maturity > datetime.date.today() # Allow today
             except: raise ValueError(f"Invalid maturity date: '{maturity_str}'")
 
-            try: price = float(price_str); assert price > 0
-            except: raise ValueError(f"Invalid price: '{price_str}'")
+            if args.solve_yield:
+                try: target_yield = float(third_str); assert target_yield >= 0
+                except: raise ValueError(f"Invalid target yield: '{third_str}'")
+                price = price_from_yield(target_yield, coupon, maturity)
+                print(color_header("Solved Price from Yield"))
+                print(f"Target Yield: {color_value(f'{target_yield:.3f}%')} -> Clean Price: {color_value(f'{price:.4f}')}\n")
+            else:
+                try: price = float(third_str); assert price > 0
+                except: raise ValueError(f"Invalid price: '{third_str}'")
             # --- End Input Validation ---
 
             # --- Core Calculations ---
@@ -826,7 +895,7 @@ def main():
 
         except ValueError as e: # Catch input validation errors
             print(f"Input Error: {e}")
-            print_help()
+            print_usage()
             sys.exit(1)
         except Exception as e: # Catch unexpected errors during single run
             print(f"An unexpected error occurred: {e}")
@@ -835,9 +904,12 @@ def main():
 
 
     else:
-        # ... handle invalid arguments ...
-        print("Error: Invalid arguments. Use -h for help.")
-        print_help()
+        # Wrong number of positional args (0 or 3 are the only valid counts; 0 falls through to here too)
+        if args.details:
+            print(f"Error: Expected 3 arguments, got {len(args.details)}.", file=sys.stderr)
+        else:
+            print("Error: No arguments given.", file=sys.stderr)
+        print_usage()
         sys.exit(1)
 
 if __name__ == "__main__":
