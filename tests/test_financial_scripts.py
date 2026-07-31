@@ -3,13 +3,39 @@
 """
 Financial Analytics Test Suite
 ------------------------------
-Version: 1.2.3
-Path: ~/dev/financial-analytics/tests/test_financial_scripts.py
+Version: 1.3.0
+Path: tests/test_financial_scripts.py (relative to the repo root)
 
 DESCRIPTION:
     A centralized validation framework for the financial-analytics project.
     It executes standalone scripts as subprocesses to ensure environment
     configuration, API connectivity, and data parsing logic remain intact.
+
+GETTING STARTED (new contributors start here):
+    1. Install dependencies (pytest, python-dotenv, plus whatever the target
+       scripts themselves need - requests, beautifulsoup4, etc.):
+           pip install -r requirements.txt   # or install pytest/python-dotenv directly
+
+    2. Provide the .env files the scripts under test read from. Missing keys
+       cause the *target script* to exit non-zero, which shows up here as a
+       test failure - not a bug in this suite:
+           <repo_root>/.env                ALPHA_VANTAGE_KEY=...
+           <repo_root>/bond-analytics/.env FRED_API_KEY=...
+       (EMAIL_FROM/EMAIL_TO/SMTP_USER/SMTP_PASS are only needed if you run
+       bond_alert.py's live email-alert path yourself; this suite's bond_alert.py
+       test case doesn't exercise that path.)
+
+    3. Run it:
+           pytest tests/test_financial_scripts.py -v            # full suite
+           pytest tests/test_financial_scripts.py -v -m "not slow"  # skip slow cases
+           pytest tests/test_financial_scripts.py -v -k bond_alert  # one script only
+           python3 tests/test_financial_scripts.py --run-now [--fast]  # no pytest CLI needed
+
+    NOTE ON NETWORK ACCESS: almost every test here runs a real script that hits
+    a live API or scrapes a live web page (FRED, Yahoo Finance, Alpha Vantage,
+    etc.) - there are no mocks. A failure often means the upstream source
+    changed its response shape, not that this suite regressed. Network access
+    and valid API keys are required to get a clean run.
 
 CORE VALIDATIONS:
     - Process Integrity: Verifies scripts exit with code 0.
@@ -17,20 +43,36 @@ CORE VALIDATIONS:
     - Env Integrity: Checks for mandatory keys like ALPHA_VANTAGE_KEY.
     - Side Effects: Confirms file generation (e.g., .ics files).
 
+ADDING A NEW TEST CASE:
+    Append a tuple to SCRIPT_TESTS: (script_path, args, validation_regex, needs_env).
+        - script_path:      absolute path, built from BASE_DIR or BOND_DIR.
+        - args:             list of CLI args to pass to the script.
+        - validation_regex: pattern that must appear somewhere in stdout.
+        - needs_env:        True only if the script requires ALPHA_VANTAGE_KEY
+                             specifically - this flag doesn't generalize to other
+                             keys. If you add a script that needs a different key
+                             (e.g. FRED_API_KEY), extend the env check inside
+                             test_script_execution rather than reusing this flag.
+    Wrap the tuple in pytest.param(..., marks=pytest.mark.slow) for anything
+    that's expensive to run (see value_price_screener.py below).
+    For scripts whose success shows up as a file side effect rather than
+    distinctive stdout, add a dedicated test function instead of a SCRIPT_TESTS
+    entry (see test_auction_calendar_side_effects for the pattern).
+
 USAGE:
     Standard:   pytest tests/test_financial_scripts.py -v
     With Logs:  pytest tests/test_financial_scripts.py -v --log-file=test_results.log
     Help:       python3 tests/test_financial_scripts.py --help
     Direct:     python3 tests/test_financial_scripts.py --run-now [--fast]
 
+    Logging: every run also writes test_summary.log in whatever directory you
+    invoked pytest from (typically the repo root), in addition to console output.
+
 DEPENDENCIES:
     - pytest
     - python-dotenv
     - subprocess (stdlib)
     - re (stdlib)
-
-AUTHOR:
-    Professor Falken
 """
 
 import subprocess
@@ -55,10 +97,12 @@ logging.basicConfig(
 load_dotenv()
 
 # Constants
-# Defines the directory structure relative to the user's home directory.
-BASE_DIR = os.path.expanduser("~/dev/financial-analytics")
+# BASE_DIR is derived from this file's own location (repo_root/tests/this_file)
+# rather than a hardcoded path, so the suite works regardless of where the repo
+# is cloned.
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BOND_DIR = os.path.join(BASE_DIR, "bond-analytics")
-VERSION = "1.2.3"
+VERSION = "1.3.0"
 
 
 def pytest_configure(config):
@@ -92,9 +136,17 @@ pytest suite located in this directory. It ensures that the technical
 requirements of the financial analytics project are met.
 
 REQUIREMENTS:
-  - python-dotenv: To load ALPHA_VANTAGE_KEY from .env
+  - python-dotenv: To load env vars from .env
   - pytest: To run the parametrized test stubs
-  - Project Files: Scripts must be in {BASE_DIR}
+  - Project Files: Scripts are located relative to this repo, at {BASE_DIR}
+
+SETUP (first time running this suite):
+  1. pip install pytest python-dotenv (plus each target script's own deps)
+  2. Create an .env file with ALPHA_VANTAGE_KEY=... at:
+       {BASE_DIR}/.env
+  3. Create an .env file with at least FRED_API_KEY=... at:
+       {BOND_DIR}/.env
+  4. Run: pytest tests/test_financial_scripts.py -v -m "not slow"
 
 SCRIPTS TESTED:
   - Equity Analytics (get_dividend.py, value_screener.py, etc.)
@@ -102,16 +154,20 @@ SCRIPTS TESTED:
 
 VALIDATION METHODOLOGY:
   The suite uses subprocess.run to isolate the execution environment of each
-  script. Standard output is captured and validated against specific Regex 
-  patterns to ensure data integrity without requiring direct library imports 
-  from the target scripts. This prevents dependency bleed between the 
-  validation logic and the financial models.
+  script. Standard output is captured and validated against specific Regex
+  patterns to ensure data integrity without requiring direct library imports
+  from the target scripts. This prevents dependency bleed between the
+  validation logic and the financial models. Nearly every test hits a live
+  API or scrapes a live web page - there are no mocks, so network access and
+  valid API keys are required for a clean run.
 
 ENVIRONMENT CHECKING:
-  Scripts requiring the ALPHA_VANTAGE_KEY are flagged in the test matrix. 
-  The suite will explicitly fail if the key is missing from the local 
-  environment, preventing false negatives caused by API authentication 
-  rejections.
+  Scripts requiring the ALPHA_VANTAGE_KEY are flagged in the test matrix via
+  the needs_env flag. The suite will explicitly fail if the key is missing
+  from the local environment, preventing false negatives caused by API
+  authentication rejections. Other required keys (e.g. FRED_API_KEY for the
+  bond-analytics scripts) aren't tracked by needs_env - if they're missing,
+  the target script itself exits non-zero and the test fails that way instead.
 
 EXIT CODES:
   0: Success / Help displayed
