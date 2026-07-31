@@ -22,8 +22,21 @@ default -- pending any future decision to re-enable it (e.g. --source finra).
 import json
 import re
 import requests
+from datetime import datetime
 
 QUOTE_URL_TEMPLATE = "https://www.webull.com/quote/bond-{cusip}"
+
+# Undocumented endpoint discovered by inspecting network requests fired by the quote
+# page's own chart -- same reverse-engineered-with-no-SLA class as the __initState__
+# scrape above. Returns real historical price/yield bars (not just the live snapshot)
+# for a bond, keyed by Webull's internal tickerId rather than CUSIP. period controls
+# both range and bar granularity: "d1"/"d5" return minute bars for the current/last
+# few trading days; "m1"/"y1"/"y5" return progressively coarser (daily/weekly) bars
+# reaching back to whenever the bond started trading -- "y5" does not mean "exactly
+# 5 years back," it means "the longest-range bucket," which for a bond younger than
+# 5 years is just its whole trading life (confirmed: a bond issued days earlier
+# returns exactly 1 row).
+TREND_URL = "https://quotes-gw.webullfintech.com/api/bonds/charts/trend"
 
 REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0",
@@ -88,6 +101,73 @@ def fetch_treasury_price(cusip: str, timeout: float = 10.0) -> dict | None:
         "tradeTime": rt.get("tradeTime"),
         "status": rt.get("status"),
     }
+
+
+def fetch_ticker_id(cusip: str, timeout: float = 10.0) -> str | None:
+    """Look up the Webull internal tickerId for a CUSIP (the tickerMap key in
+    window.__initState__), needed to call TREND_URL. Returns None if Webull has
+    no listing for this CUSIP.
+    """
+    url = QUOTE_URL_TEMPLATE.format(cusip=cusip.lower())
+    response = requests.get(url, headers=REQUEST_HEADERS, timeout=timeout)
+    response.raise_for_status()
+
+    state = _extract_init_state(response.text)
+    ticker_map = state.get("tickerMap") or {}
+    if not ticker_map:
+        return None
+    return next(iter(ticker_map.keys()))
+
+
+def fetch_price_history(cusip: str, period: str = "y1", count: int = 800, timeout: float = 10.0) -> list[dict] | None:
+    """Fetch a CUSIP's historical price/yield bars from Webull's TREND_URL.
+
+    period: "d1"/"d5" (minute bars, current/last few days), "m1"/"y1" (daily bars,
+    the default -- 800 bars covers roughly 3 years), or "y5" (weekly bars, the
+    longest-range bucket Webull offers, trading resolution for reach). The default
+    favors resolution over maximum lookback since callers charting short ranges
+    (e.g. "1M") get no benefit from a weekly bar covering the whole month.
+
+    Returns a list of {date, price, yield} dicts oldest-first, or None if Webull has
+    no listing for this CUSIP or returns no bars (e.g. this CUSIP hasn't traded yet).
+    """
+    ticker_id = fetch_ticker_id(cusip, timeout)
+    if not ticker_id:
+        return None
+
+    response = requests.get(
+        TREND_URL,
+        params={"tickerIds": ticker_id, "period": period, "count": count},
+        headers=REQUEST_HEADERS,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not payload:
+        return None
+
+    row = payload[0]
+    price_bars = row.get("data") or []
+    yield_bars = row.get("yieldData") or []
+    # Each bar is "timestamp,close,open,high,low,prevClose,volume,...". Close is what
+    # Webull's own Price-mode chart plots, so that's what's used here.
+    yields_by_ts = {}
+    for bar in yield_bars:
+        fields = bar.split(",")
+        yields_by_ts[fields[0]] = float(fields[1])
+
+    history = []
+    for bar in price_bars:
+        fields = bar.split(",")
+        ts, close = fields[0], fields[1]
+        history.append({
+            "date": datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d"),
+            "price": float(close),
+            "yield": yields_by_ts.get(ts),
+        })
+    # Webull returns bars newest-first; flip to oldest-first for charting.
+    history.reverse()
+    return history
 
 
 if __name__ == "__main__":

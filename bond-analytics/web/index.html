@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bond Price Comparison</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --danger:         #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --danger:         #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --danger:         #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  header {
+    padding: 20px 24px 12px;
+  }
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  #status {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  #status.error { color: var(--danger); }
+
+  main {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 16px;
+    padding: 0 24px 24px;
+    max-width: 1400px;
+  }
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  #bondList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .bond-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .bond-row input[type="checkbox"] {
+    margin-top: 3px;
+    accent-color: var(--swatch, #2a78d6);
+  }
+  .swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    position: relative;
+    top: 1px;
+  }
+  .bond-line1 { display: flex; align-items: baseline; }
+  .bond-label { color: var(--text-primary); }
+  .bond-maturity,
+  .bond-cusip {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+    margin-left: 16px;
+  }
+  .bond-sub { color: var(--text-muted); font-size: 11px; margin-top: 2px; margin-left: 16px; }
+  .bond-warn { color: var(--danger); font-size: 11px; margin-top: 2px; margin-left: 16px; }
+
+  #rangeButtons {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  #rangeButtons button {
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  #rangeButtons button.active {
+    background: var(--text-primary);
+    color: var(--surface-1);
+    border-color: var(--text-primary);
+  }
+
+  #chartWrap {
+    position: relative;
+    height: 520px;
+  }
+
+  #refreshBtn {
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin-left: auto;
+  }
+  .chart-header {
+    display: flex;
+    align-items: center;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Bond Price Comparison</h1>
+  <div id="status">Loading watchlist…</div>
+</header>
+<main>
+  <div class="panel">
+    <div id="bondList"></div>
+  </div>
+  <div class="panel">
+    <div class="chart-header">
+      <div id="rangeButtons"></div>
+      <button id="refreshBtn">Refresh</button>
+    </div>
+    <div id="chartWrap">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+</main>
+<script src="vendor/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
