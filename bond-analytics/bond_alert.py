@@ -3,13 +3,13 @@
 """
 Bond Alert - Monitor Treasury Bond Yields and Send Email Alerts
 
-This script monitors various US Treasury bond yields (10Y, 20Y, 30Y bonds and 10Y TIPS)
-using the FRED API. It checks if any yields exceed configured thresholds and sends
-email alerts when thresholds are breached.
+This script monitors various US Treasury bond yields (2Y Note, 10Y Bill, 20Y and
+30Y Bonds, and 10Y TIPS) using the FRED API. It checks if any yields exceed
+configured thresholds and sends email alerts when thresholds are breached.
 
 Author: sancheza
 License: MIT
-Version: 1.0.2
+Version: 1.0.3
 """
 
 import requests
@@ -19,10 +19,8 @@ from dotenv import load_dotenv
 import os
 import argparse
 from typing import Dict, Tuple, Optional
-import sys
-from datetime import datetime
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 
 # ANSI escape codes for formatting
 BOLD = "\033[1m"
@@ -40,6 +38,13 @@ THRESHOLDS = {
     "30Y_BOND": 5.10,    # 30-year Treasury Bond
     "10Y_TIPS": 2.30     # 10-year TIPS
 }
+
+# Sanity bounds for YIELD_THRESHOLD overrides (in %). TIPS real yields have gone
+# slightly negative before (e.g. 2020-2021), so the floor allows some headroom
+# below zero. The ceiling is well above any historical Treasury yield, just to
+# catch typos/garbage (e.g. a stray extra digit or unit confusion).
+MIN_YIELD_THRESHOLD = -5.0
+MAX_YIELD_THRESHOLD = 25.0
 
 # FRED Series IDs for different bonds
 SERIES_IDS = {
@@ -114,23 +119,70 @@ EMAIL_FROM = os.getenv("EMAIL_FROM")
 EMAIL_TO = os.getenv("EMAIL_TO")
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASS = os.getenv("SMTP_PASS")
-YIELD_THRESHOLD_ENV = os.getenv("YIELD_THRESHOLD")
 
-# Check for environment variable override for thresholds
-if YIELD_THRESHOLD_ENV:
+# Timeout (seconds) for FRED API requests
+REQUEST_TIMEOUT = 10
+
+def validate_config() -> None:
+    """
+    Ensure required .env values are present before making API calls or sending email.
+
+    Raises:
+        SystemExit: If any required environment variable is missing or empty.
+    """
+    required = {
+        "FRED_API_KEY": FRED_API_KEY,
+        "EMAIL_FROM": EMAIL_FROM,
+        "EMAIL_TO": EMAIL_TO,
+        "SMTP_USER": SMTP_USER,
+        "SMTP_PASS": SMTP_PASS,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        print(f"{RED}Error: Missing required .env value(s): {', '.join(missing)}.{RESET}")
+        print(f"{RED}Run with --help to see the expected .env format.{RESET}")
+        raise SystemExit(1)
+
+def apply_yield_threshold_override(env_value: Optional[str]) -> None:
+    """
+    Override THRESHOLDS in place from a YIELD_THRESHOLD env value, if valid.
+
+    Expects a semicolon-separated list of percentages (e.g. "4.1%;4.6%;5.1%;5.2%;2.4%")
+    in the same order as THRESHOLDS/SERIES_IDS. Falls back to the script's defaults,
+    with a warning, if the value is missing, has the wrong number of entries, fails
+    to parse as floats, or contains a value outside [MIN_YIELD_THRESHOLD, MAX_YIELD_THRESHOLD].
+
+    Args:
+        env_value (Optional[str]): The raw YIELD_THRESHOLD environment variable value.
+    """
+    if not env_value:
+        return
+
     try:
         # Split by semicolon, remove percentage signs, and filter out empty strings
-        yield_values_str = [v.strip().replace('%', '') for v in YIELD_THRESHOLD_ENV.split(';')]
+        yield_values_str = [v.strip().replace('%', '') for v in env_value.split(';')]
         yield_values_float = [float(v) for v in yield_values_str if v]
-        threshold_keys = list(THRESHOLDS.keys())
-        if len(yield_values_float) == len(threshold_keys):
-            for i, key in enumerate(threshold_keys):
-                THRESHOLDS[key] = yield_values_float[i]
-            print(f"{CYAN}Using custom thresholds from YIELD_THRESHOLD environment variable.{RESET}")
-        else:
-            print(f"{YELLOW}Warning: YIELD_THRESHOLD variable has an incorrect number of values ({len(yield_values_float)} instead of {len(threshold_keys)}). Using defaults.{RESET}")
     except (ValueError, TypeError) as e:
         print(f"{YELLOW}Warning: Could not parse YIELD_THRESHOLD environment variable: {e}. Using defaults.{RESET}")
+        return
+
+    threshold_keys = list(THRESHOLDS.keys())
+    if len(yield_values_float) != len(threshold_keys):
+        print(f"{YELLOW}Warning: YIELD_THRESHOLD variable has an incorrect number of values ({len(yield_values_float)} instead of {len(threshold_keys)}). Using defaults.{RESET}")
+        return
+
+    out_of_range = [
+        f"{key}={value:.2f}%" for key, value in zip(threshold_keys, yield_values_float)
+        if not (MIN_YIELD_THRESHOLD <= value <= MAX_YIELD_THRESHOLD)
+    ]
+    if out_of_range:
+        print(f"{YELLOW}Warning: YIELD_THRESHOLD contains values outside the allowed range "
+              f"[{MIN_YIELD_THRESHOLD:.2f}%, {MAX_YIELD_THRESHOLD:.2f}%]: {', '.join(out_of_range)}. Using defaults.{RESET}")
+        return
+
+    for key, value in zip(threshold_keys, yield_values_float):
+        THRESHOLDS[key] = value
+    print(f"{CYAN}Using custom thresholds from YIELD_THRESHOLD environment variable.{RESET}")
 
 def get_yield(series_id: str) -> Tuple[str, float]:
     """
@@ -145,6 +197,7 @@ def get_yield(series_id: str) -> Tuple[str, float]:
 
     Raises:
         requests.exceptions.HTTPError: If the API request fails.
+        requests.exceptions.Timeout: If the request exceeds REQUEST_TIMEOUT seconds.
         KeyError: If the response JSON is not in the expected format.
     """
     url = "https://api.stlouisfed.org/fred/series/observations"
@@ -155,7 +208,7 @@ def get_yield(series_id: str) -> Tuple[str, float]:
         "sort_order": "desc",
         "limit": 1
     }
-    r = requests.get(url, params=params)
+    r = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
     data = r.json()
     latest_observation = data['observations'][0]
@@ -193,6 +246,9 @@ def send_email_alert(alerts: Dict[str, Tuple[str, float, bool]]) -> None:
     """
     Send an email alert for bonds that have exceeded their thresholds.
 
+    Prints an error and returns (rather than raising) if the SMTP connection,
+    login, or send fails, since a failed alert shouldn't crash the whole run.
+
     Args:
         alerts (Dict[str, Tuple[str, float, bool]]): The results from check_all_yields.
     """
@@ -210,13 +266,19 @@ def send_email_alert(alerts: Dict[str, Tuple[str, float, bool]]) -> None:
     msg['From'] = EMAIL_FROM
     msg['To'] = EMAIL_TO
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(SMTP_USER, SMTP_PASS)
-        server.send_message(msg)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+    except smtplib.SMTPException as e:
+        print(f"{RED}Error: Failed to send email alert: {e}{RESET}")
+    except OSError as e:
+        print(f"{RED}Error: Could not connect to SMTP server: {e}{RESET}")
 
 def main() -> None:
     """
-    Parses command-line arguments and runs the bond yield check.
+    Parses command-line arguments, applies any YIELD_THRESHOLD override from
+    .env, validates required config, and runs the bond yield check.
     """
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
@@ -227,6 +289,8 @@ def main() -> None:
     parser.add_argument('--showsettings', action='store_true', help='Display current threshold settings')
     args = parser.parse_args()
 
+    apply_yield_threshold_override(os.getenv("YIELD_THRESHOLD"))
+
     if args.showsettings:
         print("\nCurrent Threshold Settings:")
         print("=" * 50)
@@ -234,6 +298,8 @@ def main() -> None:
             print(f"{bond_type:<10}: {threshold:>5.2f}% (Series ID: {SERIES_IDS[bond_type]})")
         print("=" * 50)
         return
+
+    validate_config()
 
     alerts = check_all_yields()
     if any(alert[2] for alert in alerts.values()):
