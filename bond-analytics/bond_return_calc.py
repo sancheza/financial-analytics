@@ -9,6 +9,7 @@ from typing import Tuple, List, Optional
 from scipy.optimize import newton
 from dateutil.relativedelta import relativedelta
 from get_bond_yield import fetch_auction_yield
+from webull_bond_fetcher import fetch_treasury_price
 import math
 import argparse
 import traceback
@@ -23,7 +24,7 @@ except ImportError:
     sys.exit(1)
 
 
-VERSION = "1.3.1" # Added plausibility checks with "did you mean" hints
+VERSION = "1.4.0" # Added --cusip (resolve coupon/maturity via live lookup)
 SETTLEMENT_LAG_DAYS = 1
 
 # Plausible ranges for sanity-checking inputs (catches price/yield mix-ups, typos, etc.)
@@ -80,7 +81,8 @@ def print_help():
 {header('OVERVIEW')}
   This script provides a detailed analysis for a secondary market bond, calculating
   key financial metrics and comparing its yield against a relevant Treasury benchmark.
-  It can run on a single bond, solve price from a target yield, or batch-process a CSV.
+  It can run on a single bond, solve price from a target yield, resolve coupon/maturity
+  from a CUSIP automatically, or batch-process a CSV.
 
 {header('USAGE EXAMPLES')}
   {BOLD}Single Bond Analysis (from price):{RESET}
@@ -90,6 +92,12 @@ def print_help():
   {BOLD}Solve Price from a Target Yield:{RESET}
     {cmd('bond_return_calc.py --yield')} {placeholder('<coupon> <maturity> <target_yield>')}
     {GREY}e.g., {cmd('bond_return_calc.py --yield 5.0 05/15/2046 5.30')}{RESET}
+
+  {BOLD}Look Up Coupon/Maturity by CUSIP:{RESET}
+    {cmd('bond_return_calc.py --cusip')} {placeholder('<CUSIP> <price>')}
+    {GREY}e.g., {cmd('bond_return_calc.py --cusip 912810UV8 97.422')}{RESET}
+    {cmd('bond_return_calc.py --cusip')} {placeholder('<CUSIP>')} {cmd('--yield')} {placeholder('<target_yield>')}
+    {GREY}e.g., {cmd('bond_return_calc.py --cusip 912810UV8 --yield 5.30')}{RESET}
 
   {BOLD}Batch Processing from CSV:{RESET}
     {cmd('bond_return_calc.py --batch')} {placeholder('<path_to_csv_file>')}
@@ -120,13 +128,14 @@ def print_help():
 
 {header('OPTIONS')}
   {BOLD}Positional (single bond mode):{RESET}
-    {placeholder('<coupon>')}          Bond coupon rate, percent (e.g., 4.625)
-    {placeholder('<maturity>')}        Bond maturity date, MM/DD/YYYY
+    {placeholder('<coupon>')}          Bond coupon rate, percent (e.g., 4.625) — omit if using {cmd('--cusip')}
+    {placeholder('<maturity>')}        Bond maturity date, MM/DD/YYYY — omit if using {cmd('--cusip')}
     {placeholder('<price>')}           Bond clean price (e.g., 99.75) — omit if using {cmd('--yield')}
     {placeholder('<target_yield>')}    Target yield, percent — only with {cmd('--yield')} (e.g., 5.30)
 """)
     options_table = [
-        [cmd('--yield'), "Treat the 3rd positional argument as a target yield (%) and\nsolve for clean price instead of analyzing from price."],
+        [cmd('--cusip CUSIP'), "Resolve <coupon> and <maturity> via a live quote lookup instead\nof entering them manually. Still requires <price> or --yield."],
+        [cmd('--yield'), "Treat the last positional argument as a target yield (%) and\nsolve for clean price instead of analyzing from price."],
         [cmd('-b, --batch FILE'), "Batch-process bonds from a CSV. Fuzzy-matches 'Coupon',\n'Maturity', and 'Price' columns by header name."],
         [cmd('--debug'), "Verbose output: benchmark API calls, per-row batch details,\nand an internal calculation dump."],
         [cmd('-h, --help'), "Show this help message and exit."],
@@ -135,13 +144,13 @@ def print_help():
     print(tabulate(options_table, tablefmt="plain"))
     print(f"""
 {header('NOTES')}
-  • {cmd('--yield')} and {cmd('--batch')} are mutually exclusive.
+  • {cmd('--cusip')} and {cmd('--yield')} may be combined; both require {cmd('--batch')} to be absent.
   • Coupon, price, and target yield are sanity-checked against plausible ranges
     (coupon/yield 0-25%, price 1-300); implausible values are rejected with a
     "did you mean" hint rather than silently producing a bogus result.
   • Settlement is always T+1 from today, so results shift slightly day to day.
-  • Benchmark comparison and grading require network access to fetch live Treasury
-    auction yields; without it, single-bond analysis will fail (batch rows will be
+  • Benchmark comparison and grading — and {cmd('--cusip')} lookups — require network
+    access; without it, single-bond analysis will fail (batch rows will be
     skipped with an error in {cmd('--debug')} mode).
 
 {header('REQUIREMENTS')}
@@ -625,9 +634,10 @@ def main():
         description="Evaluates secondary market bonds.",
         add_help=False # Use custom help print
     )
-    parser.add_argument('details', nargs='*', help='<coupon> <maturity_MM/DD/YYYY> <price_or_yield>')
+    parser.add_argument('details', nargs='*', help='<coupon> <maturity_MM/DD/YYYY> <price_or_yield>, or just <price_or_yield> with --cusip')
     parser.add_argument('--batch', '-b', type=str, help='Path to CSV file for batch processing (E*TRADE export format expected).')
-    parser.add_argument('--yield', dest='solve_yield', action='store_true', help='Treat the third positional argument as a target yield (%%) and solve for price instead.')
+    parser.add_argument('--cusip', type=str, help='Fetch coupon and maturity for this CUSIP via live quote lookup, instead of entering them manually. Still requires a price (or --yield target) argument.')
+    parser.add_argument('--yield', dest='solve_yield', action='store_true', help='Treat the last positional argument as a target yield (%%) and solve for price instead.')
     parser.add_argument('--debug', action='store_true', help='Enable verbose API and filtering output')
     parser.add_argument('-h', '--help', action='store_true', help='Show this help message')
     parser.add_argument('-v', '--version', action='store_true', help='Show version information')
@@ -640,12 +650,23 @@ def main():
     debug = args.debug
 
     # --- Validate Flag Combinations / Arg Counts Up Front ---
+    if args.cusip and args.batch:
+        print("Error: --cusip cannot be combined with --batch.", file=sys.stderr)
+        print_usage(); sys.exit(1)
     if args.solve_yield and args.batch:
         print("Error: --yield cannot be combined with --batch.", file=sys.stderr)
         print_usage(); sys.exit(1)
-    if args.solve_yield and not (args.details and len(args.details) == 3):
-        print(f"Error: --yield requires exactly 3 arguments: <coupon> <maturity> <target_yield> (got {len(args.details)}).", file=sys.stderr)
-        print_usage(); sys.exit(1)
+    if not args.batch:
+        expected_count = 1 if args.cusip else 3
+        value_slot = "<price> (or <target_yield> with --yield)"
+        if len(args.details) != expected_count:
+            if args.cusip:
+                print(f"Error: --cusip requires exactly 1 argument: {value_slot} (got {len(args.details)}).", file=sys.stderr)
+            elif args.details:
+                print(f"Error: Expected 3 arguments: <coupon> <maturity> {value_slot} (got {len(args.details)}).", file=sys.stderr)
+            else:
+                print("Error: No arguments given.", file=sys.stderr)
+            print_usage(); sys.exit(1)
     # --- End Validation ---
 
     # --- Output Formatting Helpers ---
@@ -838,26 +859,46 @@ def main():
             sys.exit(1)
 
 
-    elif args.details and len(args.details) == 3:
-        # --- Single Bond Mode ---
-        # --- Argument Parsing and Initial Validation ---
-        coupon_str, maturity_str, third_str = args.details
-
+    elif args.details:
+        # --- Single Bond Mode (typed <coupon> <maturity>, or resolved via --cusip) ---
         try:
+            if args.cusip:
+                cusip = args.cusip.strip().upper()
+                try:
+                    fetched = fetch_treasury_price(cusip)
+                except Exception as e:
+                    raise RuntimeError(f"Failed to fetch data for CUSIP '{cusip}': {e}")
+                if not fetched:
+                    raise ValueError(f"No Treasury record found for CUSIP '{cusip}'.")
+                try:
+                    coupon = float(fetched['couponRate'])
+                    maturity = datetime.datetime.strptime(fetched['maturityDate'], "%Y-%m-%d").date()
+                except (KeyError, TypeError, ValueError):
+                    raise ValueError(f"Incomplete or unparseable data returned for CUSIP '{cusip}': {fetched}")
+                coupon_str = f"{coupon:.3f}"
+                maturity_str = maturity.strftime('%m/%d/%Y')
+                base_args = f"--cusip {cusip}"
+                third_str = args.details[0]
+                print(color_header(f"CUSIP {cusip}"))
+                print(f"Resolved: {fetched.get('issuerName') or 'U.S. Treasury'} | Coupon {coupon_str}% | Maturity {maturity_str}\n")
+            else:
+                coupon_str, maturity_str, third_str = args.details
+                try: coupon = float(coupon_str); assert coupon >= 0
+                except: raise ValueError(f"Invalid coupon rate: '{coupon_str}'")
+                _check_plausible("Coupon rate", coupon, COUPON_RANGE_PCT, unit="%",
+                                  hint="Check the value and argument order (<coupon> <maturity> <price_or_yield>).")
+
+                try: maturity = datetime.datetime.strptime(maturity_str, "%m/%d/%Y").date(); # assert maturity > datetime.date.today() # Allow today
+                except: raise ValueError(f"Invalid maturity date: '{maturity_str}'")
+                base_args = f"{coupon_str} {maturity_str}"
+            # --- End Identity Resolution ---
+
             # --- Input Validation (Simplified using try/except float/date) ---
-            try: coupon = float(coupon_str); assert coupon >= 0
-            except: raise ValueError(f"Invalid coupon rate: '{coupon_str}'")
-            _check_plausible("Coupon rate", coupon, COUPON_RANGE_PCT, unit="%",
-                              hint="Check the value and argument order (<coupon> <maturity> <price_or_yield>).")
-
-            try: maturity = datetime.datetime.strptime(maturity_str, "%m/%d/%Y").date(); # assert maturity > datetime.date.today() # Allow today
-            except: raise ValueError(f"Invalid maturity date: '{maturity_str}'")
-
             if args.solve_yield:
                 try: target_yield = float(third_str); assert target_yield >= 0
                 except: raise ValueError(f"Invalid target yield: '{third_str}'")
                 _check_plausible("Target yield", target_yield, YIELD_RANGE_PCT, unit="%",
-                                  hint=f"Did you mean to drop --yield and pass this as a price? e.g. bond_return_calc.py {coupon_str} {maturity_str} {third_str}")
+                                  hint=f"Did you mean to drop --yield and pass this as a price? e.g. bond_return_calc.py {base_args} {third_str}")
                 price = price_from_yield(target_yield, coupon, maturity)
                 print(color_header("Solved Price from Yield"))
                 print(f"Target Yield: {color_value(f'{target_yield:.3f}%')} -> Clean Price: {color_value(f'{price:.4f}')}\n")
@@ -865,7 +906,7 @@ def main():
                 try: price = float(third_str); assert price > 0
                 except: raise ValueError(f"Invalid price: '{third_str}'")
                 _check_plausible("Price", price, PRICE_RANGE,
-                                  hint=f"Did you mean to add --yield and pass this as a target yield? e.g. bond_return_calc.py --yield {coupon_str} {maturity_str} {third_str}")
+                                  hint=f"Did you mean to add --yield and pass this as a target yield? e.g. bond_return_calc.py --yield {base_args} {third_str}")
             # --- End Input Validation ---
 
             # --- Core Calculations ---
@@ -876,7 +917,7 @@ def main():
                     # A valid-looking price can still imply an absurd yield (e.g. price/yield swapped
                     # by mistake); catch that here since price alone isn't enough to detect it.
                     _check_plausible("Implied yield", result.get('ytm_pct', 0.0), YIELD_RANGE_PCT, unit="%",
-                                      hint=f"Did you mean to use --yield and pass this value as a target yield? e.g. bond_return_calc.py --yield {coupon_str} {maturity_str} {third_str}")
+                                      hint=f"Did you mean to use --yield and pass this value as a target yield? e.g. bond_return_calc.py --yield {base_args} {third_str}")
                 # --- Print Results using the returned dictionary ---
                 print(color_header("\nBond Details"))
                 # Ensure maturity is formatted correctly if it's a date object
@@ -937,11 +978,9 @@ def main():
 
 
     else:
-        # Wrong number of positional args (0 or 3 are the only valid counts; 0 falls through to here too)
-        if args.details:
-            print(f"Error: Expected 3 arguments, got {len(args.details)}.", file=sys.stderr)
-        else:
-            print("Error: No arguments given.", file=sys.stderr)
+        # Unreachable in practice: the up-front validation above already rejects any
+        # invalid combination of --batch/--cusip/--yield and positional arg counts.
+        print("Error: No arguments given.", file=sys.stderr)
         print_usage()
         sys.exit(1)
 
