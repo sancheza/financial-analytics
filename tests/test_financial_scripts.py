@@ -3,13 +3,43 @@
 """
 Financial Analytics Test Suite
 ------------------------------
-Version: 1.3.0
 Path: tests/test_financial_scripts.py (relative to the repo root)
+Version: run `python3 tests/test_financial_scripts.py --version` to see the
+         current version (also usable directly with pytest as a plugin file).
 
-DESCRIPTION:
+This docstring is also this script's --help output (get_args() passes __doc__
+straight to argparse) and the pydoc output (`python3 -m pydoc
+./tests/test_financial_scripts.py`) - there is one copy of this guide, not three.
+
+WHAT THIS IS:
     A centralized validation framework for the financial-analytics project.
-    It executes standalone scripts as subprocesses to ensure environment
-    configuration, API connectivity, and data parsing logic remain intact.
+    Rather than unit-testing each script's internals, it runs every script as
+    a real subprocess against its real .env configuration and checks the
+    result the way a human would: exit code 0, plus an expected shape in
+    stdout (or, for a couple of scripts, an expected file side effect). That
+    makes it both a regression suite (did a change break this script?) and an
+    early-warning system for upstream drift (did FRED / Yahoo Finance / Alpha
+    Vantage change their response shape under us?).
+
+HOW IT WORKS:
+    - SCRIPT_TESTS is a list of (script_path, args, validation_regex, needs_env)
+      tuples, parametrized into test_script_execution via
+      @pytest.mark.parametrize. Each entry runs `python3 <script_path> <args>`
+      in an isolated subprocess, then asserts returncode == 0 and
+      re.search(validation_regex, stdout).
+    - needs_env is a narrow flag: True means "fail explicitly, with a clear
+      message, if ALPHA_VANTAGE_KEY is missing" instead of letting the
+      subprocess fail more cryptically on its own. It does not generalize to
+      other keys - see ADDING A NEW TEST CASE below.
+    - Scripts whose success is a file side effect rather than distinctive
+      stdout (e.g. generate_auction_calendar.py's .ics output) get their own
+      dedicated test function instead of a SCRIPT_TESTS entry - see
+      test_auction_calendar_side_effects.
+    - BASE_DIR/BOND_DIR are derived from this file's own location
+      (repo_root/tests/this_file), not hardcoded, so the suite works no
+      matter where the repo is cloned.
+    - Every run logs to both the console and test_summary.log, written to
+      whatever directory you invoked pytest from (typically the repo root).
 
 GETTING STARTED (new contributors start here):
     1. Install dependencies (pytest, python-dotenv, plus whatever the target
@@ -26,9 +56,10 @@ GETTING STARTED (new contributors start here):
        test case doesn't exercise that path.)
 
     3. Run it:
-           pytest tests/test_financial_scripts.py -v            # full suite
-           pytest tests/test_financial_scripts.py -v -m "not slow"  # skip slow cases
-           pytest tests/test_financial_scripts.py -v -k bond_alert  # one script only
+           pytest tests/test_financial_scripts.py -v                 # full suite
+           pytest tests/test_financial_scripts.py -v -m "not slow"   # skip slow cases
+           pytest tests/test_financial_scripts.py -v -k bond_alert   # one script only
+           pytest tests/test_financial_scripts.py -v --log-file=test_results.log
            python3 tests/test_financial_scripts.py --run-now [--fast]  # no pytest CLI needed
 
     NOTE ON NETWORK ACCESS: almost every test here runs a real script that hits
@@ -36,6 +67,16 @@ GETTING STARTED (new contributors start here):
     etc.) - there are no mocks. A failure often means the upstream source
     changed its response shape, not that this suite regressed. Network access
     and valid API keys are required to get a clean run.
+
+SCRIPTS COVERED:
+    - Equity Analytics: get_dividend.py, get_earnings_date.py,
+      get_ex_dividend.py, get_fair_value.py, get_forwardpe.py, get_pb.py,
+      get_projected_fcf.py, get_ticker_range.py, get_yearly_performance.py,
+      value_price_screener.py, value_screener_peak_drawdown.py, value_screener.py
+    - Bond Analytics: bond_alert.py, bond_market_analyzer.py,
+      bond_market_analyzer_viewer.py, bond_return_calc.py, calculate_YTW.py,
+      generate_auction_calendar.py, get_bond_yield.py
+    See SCRIPT_TESTS below for the exact args/pattern used per script.
 
 CORE VALIDATIONS:
     - Process Integrity: Verifies scripts exit with code 0.
@@ -59,14 +100,9 @@ ADDING A NEW TEST CASE:
     distinctive stdout, add a dedicated test function instead of a SCRIPT_TESTS
     entry (see test_auction_calendar_side_effects for the pattern).
 
-USAGE:
-    Standard:   pytest tests/test_financial_scripts.py -v
-    With Logs:  pytest tests/test_financial_scripts.py -v --log-file=test_results.log
-    Help:       python3 tests/test_financial_scripts.py --help
-    Direct:     python3 tests/test_financial_scripts.py --run-now [--fast]
-
-    Logging: every run also writes test_summary.log in whatever directory you
-    invoked pytest from (typically the repo root), in addition to console output.
+EXIT CODES:
+    0: Success / help displayed
+    1: Test failure or environment error
 
 DEPENDENCIES:
     - pytest
@@ -122,57 +158,15 @@ def pytest_configure(config):
 
 def get_args():
     """
-    Detailed CLI Help Interface.
-    Explains the testing methodology and requirements to the user.
-    Provides a fallback for users not running via the pytest binary.
+    Build the argparse parser used for direct (non-pytest) invocation.
+
+    Reuses this module's own docstring as the --help description instead of
+    maintaining a second copy of the same guide, so the module docstring,
+    `--help` output, and `pydoc` output are always identical.
     """
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=f"""
-Financial Analytics Test Suite v{VERSION}
-==========================================
-This script serves as the metadata provider and direct-run helper for the 
-pytest suite located in this directory. It ensures that the technical
-requirements of the financial analytics project are met.
-
-REQUIREMENTS:
-  - python-dotenv: To load env vars from .env
-  - pytest: To run the parametrized test stubs
-  - Project Files: Scripts are located relative to this repo, at {BASE_DIR}
-
-SETUP (first time running this suite):
-  1. pip install pytest python-dotenv (plus each target script's own deps)
-  2. Create an .env file with ALPHA_VANTAGE_KEY=... at:
-       {BASE_DIR}/.env
-  3. Create an .env file with at least FRED_API_KEY=... at:
-       {BOND_DIR}/.env
-  4. Run: pytest tests/test_financial_scripts.py -v -m "not slow"
-
-SCRIPTS TESTED:
-  - Equity Analytics (get_dividend.py, value_screener.py, etc.)
-  - Bond Analytics (bond_alert.py, calculate_YTW.py, etc.)
-
-VALIDATION METHODOLOGY:
-  The suite uses subprocess.run to isolate the execution environment of each
-  script. Standard output is captured and validated against specific Regex
-  patterns to ensure data integrity without requiring direct library imports
-  from the target scripts. This prevents dependency bleed between the
-  validation logic and the financial models. Nearly every test hits a live
-  API or scrapes a live web page - there are no mocks, so network access and
-  valid API keys are required for a clean run.
-
-ENVIRONMENT CHECKING:
-  Scripts requiring the ALPHA_VANTAGE_KEY are flagged in the test matrix via
-  the needs_env flag. The suite will explicitly fail if the key is missing
-  from the local environment, preventing false negatives caused by API
-  authentication rejections. Other required keys (e.g. FRED_API_KEY for the
-  bond-analytics scripts) aren't tracked by needs_env - if they're missing,
-  the target script itself exits non-zero and the test fails that way instead.
-
-EXIT CODES:
-  0: Success / Help displayed
-  1: Test failure or environment error
-        """,
+        description=__doc__,
     )
     parser.add_argument(
         "-v", "--version", action="version", version=f"%(prog)s {VERSION}"
