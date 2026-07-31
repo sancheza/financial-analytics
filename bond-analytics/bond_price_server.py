@@ -18,6 +18,12 @@ CUSIP. If a later fetch for some CUSIP fails (network error, Webull has no
 listing, etc.) that CUSIP's last-good cached entry is served instead, marked
 stale, rather than silently dropping it from the chart -- see fetch_one().
 
+/api/history also skips the live Webull fetch entirely for a CUSIP whose cache
+entry is younger than CACHE_TTL_SECONDS (default 5 minutes, change the
+constant below to adjust), serving that cached entry as-is instead. This
+caps how often this server hits Webull's undocumented endpoint when the page
+is reloaded or Refresh is clicked repeatedly -- see _is_fresh() / fetch_one().
+
 Reuses webull_bond_fetcher.py's page-scrape (fetch_treasury_price for the
 coupon/maturity/issuer label, fetch_price_history for the historical series --
 see that module's docstring for how fetch_price_history's endpoint was found
@@ -38,6 +44,11 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import webull_bond_fetcher
 
 VERSION = "1.0.0"
+
+# Minimum age (seconds) a cached entry must reach before /api/history will
+# attempt a fresh live fetch for that CUSIP again. Raise this to go easier on
+# Webull's undocumented endpoint; lower it (e.g. to 0) to always fetch live.
+CACHE_TTL_SECONDS = 5 * 60
 
 # Colors for the --help screen -- disabled when stdout isn't a terminal.
 _USE_COLOR = sys.stdout.isatty()
@@ -74,11 +85,29 @@ def save_cache(cache):
         json.dump(cache, f, indent=2)
 
 
+def _is_fresh(entry):
+    """True if entry's fetchedAt is within CACHE_TTL_SECONDS of now."""
+    fetched_at = entry.get("fetchedAt")
+    if not fetched_at:
+        return False
+    try:
+        age = (datetime.now() - datetime.fromisoformat(fetched_at)).total_seconds()
+    except ValueError:
+        return False
+    return 0 <= age < CACHE_TTL_SECONDS
+
+
 def fetch_one(cusip, cache):
     """Fetch label + price history for a CUSIP. Falls back to the cached entry
     (marked stale) if the live fetch fails, so a transient error doesn't blank
     out a bond that fetched fine on a previous run.
+
+    Skips the live fetch altogether -- serving the cached entry as-is -- if
+    that entry is younger than CACHE_TTL_SECONDS; see _is_fresh().
     """
+    cached = cache.get(cusip)
+    if cached and _is_fresh(cached):
+        return cached
     try:
         quote = webull_bond_fetcher.fetch_treasury_price(cusip)
         history = webull_bond_fetcher.fetch_price_history(cusip)
@@ -190,6 +219,10 @@ def print_help():
     example("Use a different port:", f"{script_name} --port 9000")
 
     print(f"\n{BOLD}{CYAN}NOTES{RESET}")
+    print(f"  - A CUSIP is only re-fetched from Webull if its cached entry is older")
+    print(f"    than CACHE_TTL_SECONDS ({CACHE_TTL_SECONDS // 60} min, edit the constant near the top of")
+    print(f"    this script to change it) -- reloading the page or clicking Refresh")
+    print(f"    sooner than that just re-serves the cached entry.")
     print("  - The Webull fetch happens on THIS server, not in the page's own JS,")
     print("    because a browser-side fetch straight to Webull's API would be")
     print("    blocked by CORS. The page only ever talks to this server.")

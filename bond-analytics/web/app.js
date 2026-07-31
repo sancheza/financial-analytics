@@ -96,7 +96,7 @@ async function loadData() {
 function renderBondList() {
   bondListEl.innerHTML = '';
   bonds.forEach((bond, i) => {
-    const row = document.createElement('label');
+    const row = document.createElement('div');
     row.className = 'bond-row';
 
     const checkbox = document.createElement('input');
@@ -108,7 +108,14 @@ function renderBondList() {
       updateChart();
     });
 
-    const textWrap = document.createElement('div');
+    // Row text links out to Webull's own chart for this CUSIP -- same URL
+    // pattern webull_bond_fetcher.py already scrapes server-side (QUOTE_URL_TEMPLATE).
+    const textWrap = document.createElement('a');
+    textWrap.className = 'bond-info';
+    textWrap.href = `https://www.webull.com/quote/bond-${bond.cusip.toLowerCase()}`;
+    textWrap.target = '_blank';
+    textWrap.rel = 'noopener noreferrer';
+    textWrap.title = `View ${bond.cusip} on Webull`;
 
     const line1 = document.createElement('div');
     line1.className = 'bond-line1';
@@ -213,6 +220,14 @@ function updateChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'nearest', intersect: true },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const cusip = chart.data.datasets[elements[0].datasetIndex].cusip;
+        window.open(`https://www.webull.com/quote/bond-${cusip.toLowerCase()}`, '_blank', 'noopener,noreferrer');
+      },
+      onHover: (evt, elements) => {
+        canvas.style.cursor = elements.length ? 'pointer' : 'default';
+      },
       scales: {
         x: {
           type: 'linear',
