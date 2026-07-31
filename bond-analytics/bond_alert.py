@@ -125,21 +125,15 @@ REQUEST_TIMEOUT = 10
 
 def validate_config() -> None:
     """
-    Ensure required .env values are present before making API calls or sending email.
+    Ensure the FRED API key is present before making API calls. Email/SMTP
+    values are validated separately, only when an alert actually needs to be
+    sent, since most runs check yields without ever breaching a threshold.
 
     Raises:
-        SystemExit: If any required environment variable is missing or empty.
+        SystemExit: If FRED_API_KEY is missing or empty.
     """
-    required = {
-        "FRED_API_KEY": FRED_API_KEY,
-        "EMAIL_FROM": EMAIL_FROM,
-        "EMAIL_TO": EMAIL_TO,
-        "SMTP_USER": SMTP_USER,
-        "SMTP_PASS": SMTP_PASS,
-    }
-    missing = [name for name, value in required.items() if not value]
-    if missing:
-        print(f"{RED}Error: Missing required .env value(s): {', '.join(missing)}.{RESET}")
+    if not FRED_API_KEY:
+        print(f"{RED}Error: Missing required .env value: FRED_API_KEY.{RESET}")
         print(f"{RED}Run with --help to see the expected .env format.{RESET}")
         raise SystemExit(1)
 
@@ -255,6 +249,17 @@ def send_email_alert(alerts: Dict[str, Tuple[str, float, bool]]) -> None:
     # Exceeded bonds will be a dict of {bond_type: (date, yield)}
     exceeded_bonds = {k: (v[0], v[1]) for k, v in alerts.items() if v[2]}
     if not exceeded_bonds:
+        return
+
+    required = {
+        "EMAIL_FROM": EMAIL_FROM,
+        "EMAIL_TO": EMAIL_TO,
+        "SMTP_USER": SMTP_USER,
+        "SMTP_PASS": SMTP_PASS,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        print(f"{RED}Error: Cannot send email alert, missing .env value(s): {', '.join(missing)}.{RESET}")
         return
 
     body = "The following bonds have exceeded their thresholds:\n\n"

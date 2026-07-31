@@ -4,7 +4,7 @@ import sys
 import requests
 from bs4 import BeautifulSoup
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 # Updated scraping logic to be more resilient to Yahoo Finance page changes.
 
 
@@ -29,18 +29,24 @@ def get_ex_dividend(ticker):
         # Search for text containing "Ex-Dividend Date" to handle <sup> tags or whitespace
         label = soup.find(string=lambda text: text and "Ex-Dividend Date" in text)
         if label:
-            # Check if we are in a table row (new layout)
-            tr = label.find_parent("tr")
-            if tr:
-                val_td = tr.find("td", class_=lambda x: x and "value" in x)
-                if val_td:
-                    raw_value = val_td.text.strip()
-
-            # Fallback for div/span layout (legacy) or if table lookup failed
-            if not raw_value and label.parent:
-                value_elem = label.parent.find_next_sibling()
+            # Current layout: label and value are sibling elements inside a shared
+            # <li> or <tr> "row" container, with the value in a class="value" element.
+            row = label.find_parent(["li", "tr"])
+            if row:
+                value_elem = row.find(["span", "td"], class_=lambda x: x and "value" in x)
                 if value_elem:
                     raw_value = value_elem.text.strip()
+
+            # Fallback: walk up from the label until an element with a next
+            # sibling is found, in case there's no <li>/<tr> row container.
+            if not raw_value:
+                node = label.parent
+                while node and node.parent and not node.find_next_sibling():
+                    node = node.parent
+                if node:
+                    sibling = node.find_next_sibling()
+                    if sibling:
+                        raw_value = sibling.text.strip()
 
     # Process the extracted value
     if raw_value:
