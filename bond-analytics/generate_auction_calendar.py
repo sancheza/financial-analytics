@@ -34,8 +34,10 @@ def setup_logging(log_to_file: bool = True) -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 # v1.04: Renamed --open to --import for clarity on adding events to calendar.
+# v1.05: Switched to auctions_query API (from upcoming_auctions) to get Reopening
+# status and Original Issue Date in event details.
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -60,6 +62,8 @@ def parse_arguments() -> argparse.Namespace:
   FiscalData Treasury API, allowing you to easily import auction schedules into
   your favorite calendar application (Google Calendar, Outlook, Apple Calendar, etc.).
   You can filter auctions by specific security types or include all.
+  Each event's details include the CUSIP, offering amount, issue date, and
+  whether the security is a reopening (with the original issue date if so).
 
 {CYAN}{BOLD}USAGE:{RESET}
   {YELLOW}python generate_auction_calendar.py [OPTIONS] [YEAR]{RESET}
@@ -139,7 +143,11 @@ def parse_arguments() -> argparse.Namespace:
 
 def fetch_auctions(year: int, debug: bool = False) -> list:
     """
-    Fetch auction data from Treasury API
+    Fetch auction data from the Treasury FiscalData auctions_query API.
+
+    Uses auctions_query rather than upcoming_auctions because it also exposes
+    reopening status and original_issue_date for reopened securities, and
+    covers both announced-but-not-yet-auctioned and historical auctions.
 
     Args:
         year: Year to fetch auctions for
@@ -164,8 +172,9 @@ def fetch_auctions(year: int, debug: bool = False) -> list:
         print(f"API parameters: {params}")
 
     try:
-        # API URL for Treasury auctions
-        api_url = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/upcoming_auctions"
+        # API URL for Treasury auctions (auctions_query has reopening + original_issue_date,
+        # which upcoming_auctions lacks)
+        api_url = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query"
 
         # Headers for requests
         headers = {
@@ -214,12 +223,24 @@ def fetch_auctions(year: int, debug: bool = False) -> list:
 
                 security_type = f"{auction.get('security_type', '')} {auction.get('security_term', '')}"
 
+                reopening = auction.get("reopening", "N/A")
+                details = (
+                    f"CUSIP: {auction.get('cusip', 'N/A')}, "
+                    f"Offering Amount: {auction.get('offering_amt', 'N/A')}, "
+                    f"Issue Date: {auction.get('issue_date', 'N/A')}, "
+                    f"Reopening: {reopening}"
+                )
+                if reopening == "Yes":
+                    original_issue_date = auction.get("original_issue_date")
+                    if original_issue_date and original_issue_date != "null":
+                        details += f" (Original Issue Date: {original_issue_date})"
+
                 processed_auction = {
                     "security_type": security_type.strip(),
                     "auction_date": auction_date,
                     "year": date_obj.year,
                     "is_announced": True,
-                    "details": f"CUSIP: {auction.get('cusip', 'N/A')}, Offering Amount: {auction.get('offering_amt', 'N/A')}, Issue Date: {auction.get('issue_date', 'N/A')}",
+                    "details": details,
                 }
                 processed_auctions.append(processed_auction)
             except Exception as e:
