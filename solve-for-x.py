@@ -24,6 +24,15 @@ from textual.widgets import Button, Checkbox, Footer, Header, Input, RadioButton
 FIELD_LABELS = {"Rate": "Percent (%)", "X": "Whole", "Result": "Part"}
 FIELD_ORDER = ("Rate", "X", "Result")
 
+HELP_TEXT = {
+    "Rate": "[b]Solving for Rate[/b] — finds the percentage.\n"
+            "Example: What interest rate earns $8,400 on a $200,000 principal?",
+    "X": "[b]Solving for Whole[/b] — finds the base amount.\n"
+         "Example: What principal is needed to earn $8,400 at 4.2%?",
+    "Result": "[b]Solving for Part[/b] — finds the portion of the whole.\n"
+              "Example: What annual income does $200,000 at 4.2% produce?",
+}
+
 TARGET_ALIASES = {
     "x": "X",
     "variable": "X",
@@ -52,7 +61,10 @@ def target_type(value):
 
 def _to_float(value, field_name):
     try:
-        return float(value)
+        s = str(value).strip().replace(",", "")
+        if field_name == "Percent":
+            s = s.rstrip("%")
+        return float(s)
     except (TypeError, ValueError):
         raise ValueError(f"'{value}' is not a valid number for {field_name}.")
 
@@ -120,6 +132,9 @@ def _numbers_to_operands(target, numbers):
     return n1, n2, None  # target == "Result"
 
 
+PLACEHOLDERS = {"Rate": "e.g. 5%", "X": "e.g. 1000000", "Result": "e.g. 50000"}
+
+
 class SolveForXApp(App):
     """Full-screen form: Tab/Shift+Tab or mouse move between fields, arrow keys
     or a click choose which field is unknown, Enter/click Solve computes it."""
@@ -138,6 +153,16 @@ class SolveForXApp(App):
     Input { margin-bottom: 1; }
     #verbose { margin-bottom: 1; }
     #solve-btn { width: 100%; }
+    #help-text {
+        height: auto;
+        min-height: 1;
+        margin-top: 1;
+        color: $text-muted;
+        background: $surface-darken-1;
+        border: round $foreground 30%;
+        text-style: italic;
+        padding: 0 2;
+    }
     #output {
         height: auto;
         min-height: 3;
@@ -159,14 +184,15 @@ class SolveForXApp(App):
         yield Header()
         with VerticalScroll(id="panel"):
             with RadioSet(id="target-select", compact=True):
-                yield RadioButton(FIELD_LABELS["Rate"], id="opt-Rate")
-                yield RadioButton(FIELD_LABELS["X"], id="opt-X", value=True)
-                yield RadioButton(FIELD_LABELS["Result"], id="opt-Result")
+                yield RadioButton("Percent (%)  —  the rate or percentage", id="opt-Rate")
+                yield RadioButton("Whole  —  the base or principal amount", id="opt-X", value=True)
+                yield RadioButton("Part  —  the result or portion", id="opt-Result")
             for name in FIELD_ORDER:
                 yield Input(id=f"input-{name}")
             yield Checkbox("Show step-by-step breakdown", id="verbose", compact=True)
             yield Button("Solve", id="solve-btn", variant="primary", compact=True)
             yield Static("", id="output")
+            yield Static("", id="help-text")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -181,6 +207,7 @@ class SolveForXApp(App):
 
     def _set_unknown(self, target: str) -> None:
         self.unknown = target
+        self.query_one("#help-text").update(HELP_TEXT[target])
         for name in FIELD_ORDER:
             field = self.query_one(f"#input-{name}", Input)
             if name == target:
@@ -189,7 +216,7 @@ class SolveForXApp(App):
                 field.placeholder = "(solving for this)"
             else:
                 field.disabled = False
-                field.placeholder = "e.g. 5" if name == "Rate" else "e.g. 215000"
+                field.placeholder = PLACEHOLDERS[name]
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self._solve()
