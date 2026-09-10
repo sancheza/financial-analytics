@@ -41,17 +41,9 @@ def fetch_dividend_yield(ticker: str) -> str:
         if dividend_yield is None:
             return "No Dividend"
 
-        # The yfinance library typically returns dividendYield as a ratio (e.g., 0.069 for 6.9%).
-        # To safeguard against cases where it might be returned as a percentage (e.g., 6.9),
-        # we check if the value is a ratio (<1.0) before multiplying.
-        if dividend_yield < 1.0:
-            # Value is a ratio, so convert to percentage.
-            percent_yield = dividend_yield * 100
-        else:
-            # Value is likely already a percentage, use as is.
-            percent_yield = dividend_yield
-
-        return f"{percent_yield:.2f}%"
+        # yfinance returns dividendYield already in percentage units
+        # (e.g., 0.47 for 0.47%), so use it as is.
+        return f"{dividend_yield:.2f}%"
 
     except Exception:
         # Catch any other exceptions (e.g., network issues, malformed ticker that yfinance can't handle)
