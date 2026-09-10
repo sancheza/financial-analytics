@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import requests
 import yfinance as yf
 import argparse
 
@@ -13,20 +14,54 @@ GREEN = "\033[92m"
 YELLOW = "\033[33m"
 RESET = "\033[0m"
 
+def fetch_sec_yield(ticker: str):
+    """Queries Vanguard's public profile JSON for a fund's SEC yield.
+
+    Vanguard serves a JSON document for its own products at
+    https://investor.vanguard.com/irr/funds/profile/{TICKER}. The document
+    includes the fund's SEC yield and a day-count label (7-day for money
+    market funds, 30-day for most bond/equity funds).
+
+    Returns:
+        (sec_yield_pct, sec_day, as_of_date) for Vanguard products, or None
+        if the ticker is not a Vanguard fund or the API is unavailable.
+    """
+    url = f"https://investor.vanguard.com/irr/funds/profile/{ticker.upper()}"
+    try:
+        resp = requests.get(url, timeout=10)
+    except requests.RequestException:
+        return None
+    if resp.status_code != 200:
+        return None
+    price = resp.json().get("price", {})
+    if not price.get("secYield"):
+        return None
+    sec_day = (price.get("yieldNote") or [{}])[0].get("secDay")
+    return price["secYield"], sec_day, price.get("secYieldAsOfDate")
+
+
 # This function is the unified data fetcher for both single and batch modes.
 def fetch_dividend_yield(ticker: str) -> str:
     """
-    Fetches the forward dividend yield for a stock ticker using yfinance.
+    Fetches the dividend yield for a stock ticker, or the SEC yield for a
+    Vanguard fund, using yfinance and Vanguard's public JSON API.
 
     Args:
         ticker: The stock ticker symbol (e.g., "AAPL").
 
     Returns:
-        A string with the formatted dividend yield (e.g., "1.55%"),
-        "No Dividend" if none is offered, "Invalid Ticker" if the ticker
-        is not found, or "Error" if another issue occurs.
+        A string with the formatted yield (e.g., "1.55%" or "3.70% (7-day
+        SEC yield)"), "No Dividend" if none is offered, "Invalid Ticker" if
+        the ticker is not found, or "Error" if another issue occurs.
     """
     try:
+        # Vanguard products are served by Vanguard's own API; prefer its
+        # authoritative SEC yield when available (404 means not Vanguard).
+        sec_yield = fetch_sec_yield(ticker)
+        if sec_yield is not None:
+            yield_pct, sec_day, as_of = sec_yield
+            return f"{yield_pct} ({sec_day}-day SEC yield)"
+
         stock = yf.Ticker(ticker)
         info = stock.info
 
