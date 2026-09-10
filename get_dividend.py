@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-
 import sys
+import re
+import json
 import requests
 import yfinance as yf
 import argparse
@@ -14,18 +15,24 @@ GREEN = "\033[92m"
 YELLOW = "\033[33m"
 RESET = "\033[0m"
 
-def fetch_sec_yield(ticker: str):
-    """Queries Vanguard's public profile JSON for a fund's SEC yield.
+# iShares publishes per-fund SEC yields as JSON-LD on its product pages.
+# The URL path carries a stable numeric fund id, so maintain a small map for
+# the most common iShares bond funds. Unknown tickers fall through to the
+# other sources.
+ISHARES_PRODUCTS = {
+    "TIP": "https://www.ishares.com/us/products/239667/ishares-tips-bond-etf",
+    "AGG": "https://www.ishares.com/us/products/239458/ishares-core-total-us-bond-market-etf",
+    "LQD": "https://www.ishares.com/us/products/239566/ishares-iboxx-investment-grade-corporate-bond-etf",
+    "IEF": "https://www.ishares.com/us/products/239456/ishares-710-year-treasury-bond-etf",
+    "HYG": "https://www.ishares.com/us/products/239565/ishares-iboxx-high-yield-corporate-bond-etf",
+    "TLT": "https://www.ishares.com/us/products/239454/ishares-20-year-treasury-bond-etf",
+    "SHY": "https://www.ishares.com/us/products/239452/ishares-13-year-treasury-bond-etf",
+    "MUB": "https://www.ishares.com/us/products/239766/ishares-national-amtfree-muni-bond-etf",
+}
 
-    Vanguard serves a JSON document for its own products at
-    https://investor.vanguard.com/irr/funds/profile/{TICKER}. The document
-    includes the fund's SEC yield and a day-count label (7-day for money
-    market funds, 30-day for most bond/equity funds).
 
-    Returns:
-        (sec_yield_pct, sec_day, as_of_date) for Vanguard products, or None
-        if the ticker is not a Vanguard fund or the API is unavailable.
-    """
+def _sec_yield_vanguard(ticker):
+    """Vanguard's public profile JSON; 404 means the ticker is not a Vanguard fund."""
     url = f"https://investor.vanguard.com/irr/funds/profile/{ticker.upper()}"
     try:
         resp = requests.get(url, timeout=10)
@@ -40,27 +47,140 @@ def fetch_sec_yield(ticker: str):
     return price["secYield"], sec_day, price.get("secYieldAsOfDate")
 
 
+def _sec_yield_ishares(ticker):
+    """Parses the '30 Day SEC Yield' JSON-LD property from an iShares product page."""
+    url = ISHARES_PRODUCTS.get(ticker.upper())
+    if url is None:
+        return None
+    try:
+        resp = requests.get(url, timeout=15)
+    except requests.RequestException:
+        return None
+    if resp.status_code != 200:
+        return None
+    for block in re.findall(
+        r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', resp.text, re.S
+    ):
+        try:
+            data = json.loads(block)
+        except ValueError:
+            continue
+        values = []
+        def walk(node):
+            if isinstance(node, dict):
+                if node.get("@type") == "PropertyValue":
+                    values.append((node.get("name", ""), node.get("value")))
+                for child in node.values():
+                    walk(child)
+            elif isinstance(node, list):
+                for child in node:
+                    walk(child)
+        walk(data)
+        for i, (name, value) in enumerate(values):
+            if "SEC Yield" in name:
+                as_of = values[i + 1][1] if i + 1 < len(values) and values[i + 1][0] == "As of Dates" else None
+                return value.strip(), "30", as_of
+    return None
+
+
+def _sec_yield_schwab_official(ticker):
+    """Reads the 'SEC Yield' row from the official Schwab fund page.
+
+    The sponsor's own pages are Akamai-blocked to automation, so the page is
+    fetched through a reader proxy that returns rendered markdown. The row
+    carries its own day count (7 or 30) and as-of date. Returns None for any
+    ticker that is not a Schwab fund (the site serves a 'not found' page)."""
+    page_url = f"https://www.schwabassetmanagement.com/products/{ticker.lower()}"
+    reader_url = f"https://r.jina.ai/{page_url}"
+    try:
+        resp = requests.get(reader_url, timeout=30)
+    except requests.RequestException:
+        return None
+    if resp.status_code != 200:
+        return None
+    m = re.search(
+        r'SEC Yield \((?P<day>\d+) Day\).*?\|\s*[0-9/]+\s*\|\s*(?P<value>-?[0-9.]+%\s*)',
+        resp.text,
+        re.S,
+    )
+    if not m:
+        return None
+    value = m.group("value").strip()
+    as_of = re.search(r"SEC Yield \(\d+ Day\)\*\*\s*As of ([0-9/]+)", resp.text)
+    return value, m.group("day"), as_of.group(1) if as_of else None
+
+
+def _sec_yield_schwab(ticker):
+    """Parses the 'SEC Yield (30 Day)' row from Schwab's ETF research page.
+
+    The page also serves non-Schwab ETFs; tickers without a yield return '--'.
+    This research page is known to report unreliable values for some TIPS
+    funds (e.g. SCHP), so it is only used as a fallback."""
+    url = f"https://www.schwab.wallst.com/Prospect/Research/etfs/summary.asp?symbol={ticker}"
+    try:
+        resp = requests.get(url, timeout=10)
+    except requests.RequestException:
+        return None
+    if resp.status_code != 200:
+        return None
+    m = re.search(
+        r'<tr><th>SEC Yield <span class="nowrap">\(30 Day\)</span></th><td>([^<]*)</td></tr>',
+        resp.text,
+    )
+    if not m:
+        return None
+    value = m.group(1).strip().rstrip("*").strip()
+    if not value or value in ("--", "-"):
+        return None
+    return value, "30", None
+
+
+def fetch_sec_yield(ticker: str):
+    """Returns a fund's SEC yield from the first source that has it.
+
+    Tries, in order: iShares (for mapped tickers), Vanguard's own API, the
+    official Schwab fund page, then Schwab's research page as a fallback.
+    Returns (sec_yield_pct, sec_day, as_of_date), or None if no source has
+    SEC yield data for the ticker.
+    """
+    for source in (
+        _sec_yield_ishares,
+        _sec_yield_vanguard,
+        _sec_yield_schwab_official,
+        _sec_yield_schwab,
+    ):
+        result = source(ticker)
+        if result is not None:
+            return result
+    return None
+
+
 # This function is the unified data fetcher for both single and batch modes.
 def fetch_dividend_yield(ticker: str) -> str:
     """
     Fetches the dividend yield for a stock ticker, or the SEC yield for a
-    Vanguard fund, using yfinance and Vanguard's public JSON API.
+    fund, using fund sponsors' public data (iShares, Vanguard, Schwab) and
+    yfinance as a fallback.
 
     Args:
         ticker: The stock ticker symbol (e.g., "AAPL").
 
     Returns:
         A string with the formatted yield (e.g., "1.55%" or "3.70% (7-day
-        SEC yield)"), "No Dividend" if none is offered, "Invalid Ticker" if
-        the ticker is not found, or "Error" if another issue occurs.
+        SEC yield as of 09/09/2026)"), "No Dividend" if none is offered,
+        "Invalid Ticker" if the ticker is not found, or "Error" if another
+        issue occurs.
     """
     try:
-        # Vanguard products are served by Vanguard's own API; prefer its
-        # authoritative SEC yield when available (404 means not Vanguard).
+        # Try SEC-yield sources (iShares, Vanguard, Schwab) first; those
+        # cover funds, where a dividend yield isn't meaningful.
         sec_yield = fetch_sec_yield(ticker)
         if sec_yield is not None:
             yield_pct, sec_day, as_of = sec_yield
-            return f"{yield_pct} ({sec_day}-day SEC yield)"
+            label = f"{yield_pct} ({sec_day}-day SEC yield"
+            if as_of:
+                label += f" as of {as_of}"
+            return label + ")"
 
         stock = yf.Ticker(ticker)
         info = stock.info
