@@ -75,7 +75,8 @@ SCRIPTS COVERED:
       value_price_screener.py, value_screener_peak_drawdown.py, value_screener.py
     - Bond Analytics: bond_alert.py, bond_market_analyzer.py,
       bond_market_analyzer_viewer.py, bond_return_calc.py, calculate_YTW.py,
-      generate_auction_calendar.py, get_bond_yield.py
+      bond_yield_high_alert.py, generate_auction_calendar.py,
+      get_bond_yield.py
     See SCRIPT_TESTS below for the exact args/pattern used per script.
 
 CORE VALIDATIONS:
@@ -229,6 +230,12 @@ SCRIPT_TESTS = [
         False,
     ),
     (os.path.join(BOND_DIR, "get_bond_yield.py"), [], r"\d+\.?\d*%", False),
+    (
+        os.path.join(BOND_DIR, "bond_yield_high_alert.py"),
+        ["--dry-run"],
+        r"current_yield=\d+\.\d+%",
+        False,
+    ),
 ]
 
 

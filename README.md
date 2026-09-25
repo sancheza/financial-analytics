@@ -229,6 +229,65 @@ This script calculates the total return for Treasury bonds. It uses the Newton-R
 > - tabulate
 > - thefuzz
 
+### bond_yield_high_alert
+This script monitors configured Treasury maturity series (2Y, 10Y, 20Y, 30Y, and 10Y TIPS) against their own lookback highs using Webull's intraday yield data, and plays a sound and shows a persistent popup when a yield makes a new lookback high. The comparison uses the window measured before the live print, so a level that merely holds does not re-alert. Configure the series in `.env`:
+
+```
+BOND_TYPES=2Y_NOTE,10Y_NOTE,20Y_BOND,30Y_BOND,10Y_TIPS
+```
+
+Set the lookback with `LOOKBACK_TRADING_DAYS` near the top of the script (7 by default). That one constant drives the window, the reported `<N>D_high=` label, the popup text, and the help text:
+
+```python
+LOOKBACK_TRADING_DAYS = 7
+```
+
+Check once, without sound or popup:
+
+```bash
+cd bond-analytics && python3 bond_yield_high_alert.py --dry-run
+```
+
+```
+term=10Y_NOTE label=10-Year Treasury Note current_yield=5.179% 7D_high=5.228% high_date=2026-09-25 window=2026-09-17..2026-09-25 as_of=2026-09-25T12:25:00-04:00 [no alert]
+No configured series is above its 7-trading-day high.
+```
+
+**Scheduling on macOS** installs a LaunchAgent that runs the check on a cadence during the cash session (07:00 to the 17:00 ET close, weekdays) and does nothing outside it. The sound options given at install time are carried into the scheduled command.
+
+```bash
+# Install, checking every 5 minutes
+cd bond-analytics && python3 bond_yield_high_alert.py --install-schedule 5
+
+# Confirm it will fire, when it next fires, and that it has been running
+python3 bond_yield_high_alert.py --schedule-status
+```
+
+```
+Scheduled:     yes
+Last executed: 2026-09-25 12:40:02 EDT
+Cadence:       every 5 min, Mon-Fri 07:00-17:00 ET (121 firings per session)
+Next run:      Fri 25 Sep 12:45 EDT (in 3 min)
+Runs:          2 (last exit code 0)
+Label:         com.asanchez.bondanalytics.bondhigh
+Plist:         /Users/asanchez/Library/LaunchAgents/com.asanchez.bondanalytics.bondhigh.plist
+Log:           /Users/asanchez/dev/financial-analytics/bond-analytics/logs/bond_yield_high_schedule.log
+```
+
+`Scheduled` is the yes/no answer to "will this fire again": `yes` only when launchd has the agent loaded, and `no` when either no plist is installed or the installed one is not loaded (status prints the `launchctl bootstrap` command that fixes the second case). `Last executed` is when the scheduled job last wrote to its log, and `never` until it runs once; a foreground run in another terminal does not change it.
+Change the cadence by re-running `--install-schedule` with a new value; it regenerates the plist and reloads it, so the plist itself isn't hand-edited. Preview any of these with `--dry-run` first. Remove the schedule with:
+
+```bash
+cd bond-analytics && python3 bond_yield_high_alert.py --remove-schedule
+```
+
+Other alert sounds: `--sound` takes `asset` (the bundled MP3, default), `beeps`, `buzz`, `chime`, `klaxon`, `siren`, or `none`; `--sound-file PATH`, `--sound-repeats N`, and `--raise-volume` adjust playback.
+
+> **Dependencies**
+> - Python 3.10 or later
+> - requests
+> - python-dotenv
+
 ### finra_bond_fetcher
 This script fetches Treasury security reference and last-trade data from FINRA's public Fixed Income data service. It was the original data source for `bond_market_analyzer.py` but is now dormant (kept in the codebase and reachable via `--source finra`) after being superseded by `webull_bond_fetcher.py`, due to an unreliable reference coupon field and stale pricing for thinly-traded CUSIPs.
 

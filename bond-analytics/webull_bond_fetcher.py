@@ -21,8 +21,10 @@ default -- pending any future decision to re-enable it (e.g. --source finra).
 
 import json
 import re
-import requests
+from dataclasses import dataclass
 from datetime import datetime
+
+import requests
 
 QUOTE_URL_TEMPLATE = "https://www.webull.com/quote/bond-{cusip}"
 
@@ -42,14 +44,36 @@ REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0",
 }
 
-_INIT_STATE_RE = re.compile(r"window\.__initState__\s*=\s*(\{.*?\})\s*;?\s*(?:</script>|window\.)", re.DOTALL)
+# Webull's fixed-income yield indices. These are index series rather than bonds, so
+# they need no CUSIP lookup and never suffer a benchmark rollover: the yield stays
+# continuous across the on-the-run issue changing. The ids were identified by
+# matching each series' live level against the same tenor's CNBC/Tradeweb quote
+# (e.g. 310000003 tracks US10Y, 310000012 tracks US20Y). Webull's own Treasury
+# page names the three it publishes -- US1Y, US2Y, US10Y -- and 20Y/30Y were
+# confirmed by level agreement to within 2bp. Tenors not listed here have no
+# verified id and are deliberately absent rather than guessed.
+TREASURY_YIELD_INDEXES = {
+    "1Y": "310000001",
+    "2Y": "310000002",
+    "10Y": "310000003",
+    "20Y": "310000012",
+    "30Y": "310000013",
+}
+
+_INIT_STATE_RE = re.compile(
+    r"window\.__initState__\s*=\s*(\{.*?\})\s*;?\s*(?:</script>|window\.)",
+    re.DOTALL,
+)
 
 
 def _extract_init_state(html: str) -> dict:
     """Pull the server-rendered window.__initState__ JSON blob out of a Webull quote page."""
     match = _INIT_STATE_RE.search(html)
     if not match:
-        raise RuntimeError("Could not find window.__initState__ in Webull's page; the page layout may have changed.")
+        raise RuntimeError(
+            "Could not find window.__initState__ in Webull's page; "
+            "the page layout may have changed."
+        )
     return json.loads(match.group(1))
 
 
@@ -119,7 +143,98 @@ def fetch_ticker_id(cusip: str, timeout: float = 10.0) -> str | None:
     return next(iter(ticker_map.keys()))
 
 
-def fetch_price_history(cusip: str, period: str = "y1", count: int = 800, timeout: float = 10.0) -> list[dict] | None:
+@dataclass(frozen=True)
+class YieldBar:
+    """One bar from a Webull yield series.
+
+    Webull packs each bar as a comma-separated string:
+    ``timestamp,close,open,high,low,prevClose,volume,...``
+
+    For the daily (``m1``/``y1``) periods the ``close`` field is a per-series
+    sentinel that is not a yield (it is identical on every bar of the series),
+    while ``open``/``high``/``low`` hold real yields. Callers computing a
+    multi-day high must therefore use ``high`` rather than ``close``.
+    """
+
+    timestamp: int
+    close: float
+    open: float
+    high: float
+    low: float
+
+
+def _fetch_trend_payload(
+    ticker_id: str,
+    period: str,
+    count: int,
+    timeout: float,
+) -> dict:
+    """Fetch one series' raw chart payload, or an empty dict if Webull has none."""
+    response = requests.get(
+        TREND_URL,
+        params={"tickerIds": ticker_id, "period": period, "count": count},
+        headers=REQUEST_HEADERS,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    if not payload:
+        return {}
+    return payload[0]
+
+
+def _parse_yield_bars(raw_bars: list[str]) -> list[YieldBar]:
+    """Parse Webull's packed yield-bar strings, skipping malformed entries."""
+    candles: list[YieldBar] = []
+    for raw_candle in raw_bars:
+        fields = raw_candle.split(",")
+        if len(fields) < 5:
+            continue
+        try:
+            candles.append(
+                YieldBar(
+                    timestamp=int(fields[0]),
+                    close=float(fields[1]),
+                    open=float(fields[2]),
+                    high=float(fields[3]),
+                    low=float(fields[4]),
+                )
+            )
+        except ValueError:
+            continue
+    return candles
+
+
+def fetch_yield_bars(
+    ticker_id: str,
+    period: str = "d5",
+    count: int = 1000,
+    timeout: float = 10.0,
+) -> list[YieldBar]:
+    """Fetch a Webull yield series (index or bond) as parsed bars.
+
+    Args:
+        ticker_id: Webull internal ticker id, from TREASURY_YIELD_INDEXES for a
+            yield index or from fetch_ticker_id() for a CUSIP.
+        period: "d1"/"d5" for 30-second intraday bars covering the current/last
+            few trading days, "m1"/"y1" for daily bars, "y5" for weekly bars.
+        count: Maximum number of bars to request.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        list[YieldBar]: Parsed bars, newest first, as Webull returns them.
+    """
+    row = _fetch_trend_payload(ticker_id, period, count, timeout)
+    return _parse_yield_bars(row.get("yieldData") or [])
+
+
+def fetch_price_history(
+    cusip: str,
+    period: str = "y1",
+    count: int = 800,
+    timeout: float = 10.0,
+) -> list[dict] | None:
     """Fetch a CUSIP's historical price/yield bars from Webull's TREND_URL.
 
     period: "d1"/"d5" (minute bars, current/last few days), "m1"/"y1" (daily bars,
@@ -135,30 +250,21 @@ def fetch_price_history(cusip: str, period: str = "y1", count: int = 800, timeou
     if not ticker_id:
         return None
 
-    response = requests.get(
-        TREND_URL,
-        params={"tickerIds": ticker_id, "period": period, "count": count},
-        headers=REQUEST_HEADERS,
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if not payload:
+    row = _fetch_trend_payload(ticker_id, period, count, timeout)
+    if not row:
         return None
 
-    row = payload[0]
     price_bars = row.get("data") or []
-    yield_bars = row.get("yieldData") or []
     # Each bar is "timestamp,close,open,high,low,prevClose,volume,...". Close is what
     # Webull's own Price-mode chart plots, so that's what's used here.
-    yields_by_ts = {}
-    for bar in yield_bars:
-        fields = bar.split(",")
-        yields_by_ts[fields[0]] = float(fields[1])
+    yields_by_ts = {
+        str(candle.timestamp): candle.close
+        for candle in _parse_yield_bars(row.get("yieldData") or [])
+    }
 
     history = []
-    for bar in price_bars:
-        fields = bar.split(",")
+    for candle in price_bars:
+        fields = candle.split(",")
         ts, close = fields[0], fields[1]
         history.append({
             "date": datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d"),
