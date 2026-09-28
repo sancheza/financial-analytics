@@ -389,16 +389,14 @@ def collect_tips_series(cusips: list[str]) -> tuple[list[Any], list[Any]]:
         cusip_daily = webull_bond_fetcher.fetch_yield_bars(
             ticker_id, DAILY_PERIOD, DAILY_BAR_COUNT, REQUEST_TIMEOUT
         )
-        for candle in cusip_intraday:
-            day = candle_market_time(candle).date()
-            if day not in claimed:
-                claimed.add(day)
-                intraday.append(candle)
-        for candle in cusip_daily:
-            day = candle_market_time(candle).date()
-            if day not in claimed:
-                claimed.add(day)
-                daily.append(candle)
+
+        cusip_days = {candle_market_time(candle).date() for candle in cusip_intraday}
+        cusip_days |= {candle_market_time(candle).date() for candle in cusip_daily}
+        new_days = cusip_days - claimed
+
+        intraday += [c for c in cusip_intraday if candle_market_time(c).date() in new_days]
+        daily += [c for c in cusip_daily if candle_market_time(c).date() in new_days]
+        claimed |= new_days
 
     return intraday, daily
 
