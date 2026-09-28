@@ -317,6 +317,74 @@ def test_discover_tips_cusips_without_match_raises():
         alert.discover_tips_cusips(FakeRequests([{"cusip": "1", "issueDate": "2026-01-01", "maturityDate": "2026-02-01"}]))
 
 
+def stub_tips_fetch(monkeypatch, bars_by_cusip):
+    """Stand in for the Webull calls collect_tips_series makes per CUSIP."""
+    def fake_fetch_ticker_id(cusip, timeout):
+        return cusip
+
+    def fake_fetch_yield_bars(ticker_id, period, count, timeout):
+        intraday, daily = bars_by_cusip[ticker_id]
+        return intraday if period == alert.INTRADAY_PERIOD else daily
+
+    monkeypatch.setattr(alert.webull_bond_fetcher, "fetch_ticker_id", fake_fetch_ticker_id)
+    monkeypatch.setattr(alert.webull_bond_fetcher, "fetch_yield_bars", fake_fetch_yield_bars)
+
+
+def test_collect_tips_series_keeps_every_intraday_bar_for_one_cusip(monkeypatch):
+    """A single CUSIP's own same-day bars must not collapse down to one.
+
+    Regression for a bug where the per-candle claimed-day check discarded all
+    but the first bar of each day, even within one CUSIP's own list, so a
+    later run saw no record of an earlier same-day high and re-alerted on it.
+    """
+    days = trading_days(SESSION_DAYS)
+    today = days[-1]
+    stub_tips_fetch(
+        monkeypatch,
+        {
+            "NEWCUSIP": (
+                [make_bar(today, 9, 30, 2.10), make_bar(today, 11, 0, 2.30), make_bar(today, 14, 0, 2.20)],
+                [],
+            )
+        },
+    )
+
+    intraday, daily = alert.collect_tips_series(["NEWCUSIP"])
+
+    assert sorted(candle.close for candle in intraday) == [2.10, 2.20, 2.30]
+    assert daily == []
+
+
+def test_collect_tips_series_prefers_newest_cusip_on_overlapping_days(monkeypatch):
+    """A day both CUSIPs cover is sourced entirely from the newer issue."""
+    days = trading_days(SESSION_DAYS)
+    overlap_day, older_only_day = days[-1], days[-2]
+    stub_tips_fetch(
+        monkeypatch,
+        {
+            "NEW": (
+                [make_bar(overlap_day, 9, 30, 2.10), make_bar(overlap_day, 11, 0, 2.30)],
+                [],
+            ),
+            "OLD": (
+                [
+                    make_bar(overlap_day, 9, 30, 9.99),
+                    make_bar(older_only_day, 9, 30, 2.05),
+                ],
+                [],
+            ),
+        },
+    )
+
+    intraday, _ = alert.collect_tips_series(["NEW", "OLD"])
+
+    overlap_values = sorted(
+        candle.close for candle in intraday if alert.candle_market_time(candle).date() == overlap_day
+    )
+    assert overlap_values == [2.10, 2.30]
+    assert any(alert.candle_market_time(candle).date() == older_only_day for candle in intraday)
+
+
 def test_parse_bond_types_normalizes_and_rejects_unknown():
     """Configured names are normalized and unknown ones are rejected."""
     assert alert.parse_bond_types(" 2y note, 10Y_NOTE ,20Y_BOND") == [
