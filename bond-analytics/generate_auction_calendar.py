@@ -1,14 +1,31 @@
 #!/usr/bin/env python3
-import requests
-from datetime import datetime
-import os
-import sys
-import logging
-import re
-import json
+"""generate_auction_calendar.py: Generate an iCalendar (.ics) file of Treasury auctions.
+
+Fetches real-time auction schedules from the Treasury FiscalData API, merging
+announced and historical auctions from auctions_query with tentative, unannounced
+upcoming auctions from upcoming_auctions. Filters auctions by security type
+(standard, minimum, or all) and matches original issues and reissues/reopenings.
+Exports results to an iCalendar (.ics) file with reminder alarms and reports added
+events to stdout.
+
+Usage:
+    python generate_auction_calendar.py [OPTIONS] [YEAR]
+    python generate_auction_calendar.py 2026 --standard
+    python generate_auction_calendar.py 2026 --all
+    python generate_auction_calendar.py --import
+"""
+
 import argparse
-import subprocess
+import json
+import logging
+import os
 import platform
+import re
+import subprocess
+import sys
+from datetime import datetime
+
+import requests
 
 
 # Configure logging with option to disable file logging
@@ -34,10 +51,14 @@ def setup_logging(log_to_file: bool = True) -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-VERSION = "1.0.5"
+logger = logging.getLogger(__name__)
+
+VERSION = "1.0.6"
 # v1.04: Renamed --open to --import for clarity on adding events to calendar.
 # v1.05: Switched to auctions_query API (from upcoming_auctions) to get Reopening
 # status and Original Issue Date in event details.
+# v1.06: Fixed reopening pattern matching for 10Y/20Y/30Y/5Y notes/bonds and TIPS;
+# merged upcoming_auctions to include unannounced scheduled auctions.
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -141,88 +162,90 @@ def parse_arguments() -> argparse.Namespace:
     return args
 
 
-def fetch_auctions(year: int, debug: bool = False) -> list:
+def normalize_security_type(auction: dict) -> str:
     """
-    Fetch auction data from the Treasury FiscalData auctions_query API.
-
-    Uses auctions_query rather than upcoming_auctions because it also exposes
-    reopening status and original_issue_date for reopened securities, and
-    covers both announced-but-not-yet-auctioned and historical auctions.
+    Format security type string to distinguish TIPS from nominal securities
+    and combine with security term.
 
     Args:
-        year: Year to fetch auctions for
-        debug: Whether to save raw API response and print debug info
+        auction: Raw dictionary representing an auction record from the API.
 
     Returns:
-        List of processed auction records
+        Formatted string representing the security type and term.
+    """
+    is_tips = (
+        auction.get("inflation_index_security") == "Yes"
+        or "tips" in auction.get("security_type", "").lower()
+        or "tips" in auction.get("security_term", "").lower()
+    )
+    raw_type = auction.get("security_type", "")
+    if is_tips and not raw_type.lower().startswith("tips"):
+        raw_type = f"TIPS {raw_type}"
+    sec_term = auction.get("security_term", "")
+    return f"{raw_type} {sec_term}".strip()
+
+
+def fetch_auctions(year: int, debug: bool = False) -> list:
+    """
+    Fetch auction data from Treasury FiscalData auctions_query and upcoming_auctions APIs.
+
+    Combines announced and historical auctions from auctions_query with tentative,
+    unannounced upcoming auctions from upcoming_auctions.
+
+    Args:
+        year: Year to fetch auctions for.
+        debug: Whether to save raw API response and print debug info.
+
+    Returns:
+        List of processed auction records.
     """
     logger.info(f"Fetching auctions for year {year}...")
 
     # Define the date range for the whole year
     start_date = f"{year}-01-01"
     end_date = f"{year}-12-31"
+    today_str = datetime.now().strftime("%Y-%m-%d")
 
-    params = {
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Accept": "application/json",
+    }
+
+    processed_auctions = []
+    seen_keys = set()
+
+    # 1. Fetch announced and historical auctions from auctions_query
+    params_query = {
         "filter": f"auction_date:gte:{start_date},auction_date:lte:{end_date}",
         "sort": "auction_date",
         "page[size]": "1000",
     }
 
     if debug:
-        print(f"API parameters: {params}")
+        print(f"API parameters (auctions_query): {params_query}")
 
     try:
-        # API URL for Treasury auctions (auctions_query has reopening + original_issue_date,
-        # which upcoming_auctions lacks)
         api_url = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query"
-
-        # Headers for requests
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Accept": "application/json",
-        }
-
-        if debug:
-            print("Making API request...")
-
-        response = requests.get(api_url, params=params, headers=headers)
-
-        if debug:
-            print(f"API response status code: {response.status_code}")
-
+        response = requests.get(api_url, params=params_query, headers=headers)
         response.raise_for_status()
         data = response.json()
 
         if debug:
-            print("Successfully parsed JSON response")
-            # Save the raw API response for debugging
             with open(f"api_response_{year}.json", "w") as f:
                 json.dump(data, f, indent=2)
             print(f"Saved raw API response to api_response_{year}.json")
 
-        if "data" not in data:
-            logger.warning(f"No data field found in API response")
-            if debug:
-                print(f"API response structure: {list(data.keys())}")
-            return []
+        auctions_data = data.get("data", [])
+        logger.info(f"Retrieved {len(auctions_data)} announced/historical auction records")
 
-        auctions_data = data["data"]
-        logger.info(f"Successfully retrieved {len(auctions_data)} auction records")
-
-        # Process the auction data
-        processed_auctions = []
         for auction in auctions_data:
+            auction_date = auction.get("auction_date")
+            if not auction_date:
+                continue
+
             try:
-                # Extract relevant fields from API response
-                auction_date = auction.get("auction_date")
-                if not auction_date:
-                    continue
-
-                # Parse the date to get the year
                 date_obj = datetime.strptime(auction_date, "%Y-%m-%d")
-
-                security_type = f"{auction.get('security_type', '')} {auction.get('security_term', '')}"
-
+                security_type = normalize_security_type(auction)
                 reopening = auction.get("reopening", "N/A")
                 details = (
                     f"CUSIP: {auction.get('cusip', 'N/A')}, "
@@ -236,52 +259,104 @@ def fetch_auctions(year: int, debug: bool = False) -> list:
                         details += f" (Original Issue Date: {original_issue_date})"
 
                 processed_auction = {
-                    "security_type": security_type.strip(),
+                    "security_type": security_type,
                     "auction_date": auction_date,
                     "year": date_obj.year,
                     "is_announced": True,
                     "details": details,
                 }
                 processed_auctions.append(processed_auction)
-            except Exception as e:
+
+                cusip = auction.get("cusip")
+                if cusip:
+                    seen_keys.add((auction_date, cusip))
+                seen_keys.add((auction_date, security_type))
+            except (ValueError, KeyError) as e:
                 logger.error(f"Error processing auction record: {e}")
                 if debug:
                     print(f"Error processing auction record: {e}")
 
-        return processed_auctions
-
     except requests.exceptions.RequestException as e:
-        logger.error(f"API request failed: {e}")
+        logger.error(f"auctions_query API request failed: {e}")
         if debug:
-            print(f"API request failed: {e}")
+            print(f"auctions_query API request failed: {e}")
 
-        if hasattr(e, "response") and e.response is not None:
-            status_code = e.response.status_code
-            logger.error(f"Response status code: {status_code}")
+    # 2. Fetch unannounced upcoming auctions from upcoming_auctions for future dates
+    upcoming_start = max(start_date, today_str)
+    if upcoming_start <= end_date:
+        params_upcoming = {
+            "filter": f"auction_date:gte:{upcoming_start},auction_date:lte:{end_date}",
+            "sort": "auction_date",
+            "page[size]": "1000",
+        }
+        if debug:
+            print(f"API parameters (upcoming_auctions): {params_upcoming}")
 
-            # Provide helpful messages for common API errors
-            if status_code == 429:
-                print(
-                    "ERROR: API rate limit exceeded. Please wait a few minutes and try again."
-                )
-            elif status_code == 403:
-                print(
-                    "ERROR: Access forbidden. The API endpoint may have changed or requires authentication."
-                )
-            elif status_code >= 500:
-                print(
-                    "ERROR: The Treasury API server is experiencing issues. Please try again later."
-                )
-            else:
-                if debug:
-                    print(f"Response status code: {status_code}")
-                    print(f"Response text: {e.response.text[:500]}...")
-        else:
-            print(
-                "ERROR: Could not connect to the Treasury API. Please check your internet connection."
-            )
+        try:
+            upcoming_url = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/upcoming_auctions"
+            response_upcoming = requests.get(upcoming_url, params=params_upcoming, headers=headers)
+            response_upcoming.raise_for_status()
+            upcoming_data = response_upcoming.json().get("data", [])
 
-        return []
+            unannounced_count = 0
+            for auction in upcoming_data:
+                auction_date = auction.get("auction_date")
+                if not auction_date:
+                    continue
+
+                cusip = auction.get("cusip")
+                security_type = normalize_security_type(auction)
+
+                if (auction_date, cusip) in seen_keys or (auction_date, security_type) in seen_keys:
+                    continue
+
+                try:
+                    date_obj = datetime.strptime(auction_date, "%Y-%m-%d")
+                    reopening = auction.get("reopening", "N/A")
+                    offering_amt = auction.get("offering_amt")
+                    if not offering_amt or offering_amt == "null":
+                        offering_amt = "TBD (Unannounced)"
+
+                    announcemt_date = auction.get("announcemt_date")
+                    is_announced = bool(announcemt_date and announcemt_date <= today_str)
+
+                    details = (
+                        f"CUSIP: {cusip or 'N/A'}, "
+                        f"Offering Amount: {offering_amt}, "
+                        f"Issue Date: {auction.get('issue_date', 'N/A')}, "
+                        f"Reopening: {reopening}"
+                    )
+                    if announcemt_date:
+                        details += f", Announcement Date: {announcemt_date}"
+
+                    processed_auction = {
+                        "security_type": security_type,
+                        "auction_date": auction_date,
+                        "year": date_obj.year,
+                        "is_announced": is_announced,
+                        "details": details,
+                    }
+                    processed_auctions.append(processed_auction)
+                    if cusip:
+                        seen_keys.add((auction_date, cusip))
+                    seen_keys.add((auction_date, security_type))
+                    unannounced_count += 1
+                except (ValueError, KeyError) as e:
+                    logger.error(f"Error processing upcoming auction record: {e}")
+                    if debug:
+                        print(f"Error processing upcoming auction record: {e}")
+
+            if unannounced_count > 0:
+                logger.info(f"Retrieved {unannounced_count} unannounced upcoming records from upcoming_auctions")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"upcoming_auctions API request failed: {e}")
+            if debug:
+                print(f"upcoming_auctions API request failed: {e}")
+
+    processed_auctions.sort(key=lambda x: x["auction_date"])
+    logger.info(f"Successfully processed {len(processed_auctions)} total auction records")
+    return processed_auctions
 
 
 def format_ics(events: list) -> str:
@@ -338,7 +413,11 @@ def format_ics(events: list) -> str:
 
 
 def open_file(filepath: str) -> None:
-    """Opens a file with the default application for the current OS."""
+    """Open a file with the default application for the current OS.
+
+    Args:
+        filepath: Path to the calendar file to open.
+    """
     system = platform.system()
     try:
         if system == "Darwin":  # macOS
@@ -355,11 +434,11 @@ def open_file(filepath: str) -> None:
 
 
 def main() -> None:
-    """
-    Main function to generate the Treasury auction calendar.
+    """Main function to generate the Treasury auction calendar.
 
-    Fetches auction data from the Treasury API, filters by security type,
-    and generates an iCalendar (.ics) file for import into calendar apps.
+    Fetches auction data from Treasury FiscalData APIs, filters by security
+    type including reissues, outputs added events to stdout, and generates
+    an iCalendar (.ics) file for import into calendar applications.
     """
     # Parse command line arguments
     args = parse_arguments()
@@ -388,33 +467,60 @@ def main() -> None:
         print(f"Filter mode: STANDARD securities (default)")
 
     # Define minimum security types (original list)
-    # Patterns use regex to match API security_term values. The API may return
-    # values like "19-Year 11-Month" which round to 20-Year, so patterns include
-    # fallback matches for year+month combinations (e.g., "19.year.*1[01].month"
-    # matches both 10 and 11 months).
+    # Patterns use regex to match API security_term values. Reopenings/reissues
+    # are reported with their remaining term (e.g., 9-Year 10-Month for 10-Year Notes,
+    # 19-Year 10-Month for 20-Year Bonds, 29-Year 10-Month for 30-Year Bonds).
     minimum_security_types = [
-        {"name": "5-Year TIPS", "patterns": ["tips.*5.year", "5.year.*tips"]},
-        {"name": "10-Year TIPS", "patterns": ["tips.*10.year", "10.year.*tips"]},
-        {"name": "10-Year Note", "patterns": ["note.*10.year", "10.year.*note"]},
+        {
+            "name": "5-Year TIPS",
+            "patterns": [
+                r"tips.*5.year",
+                r"5.year.*tips",
+                r"tips.*4.year.*1[01].month",
+            ],
+        },
+        {
+            "name": "10-Year TIPS",
+            "patterns": [
+                r"tips.*10.year",
+                r"10.year.*tips",
+                r"tips.*9.year.*(8|9|10|11).month",
+            ],
+        },
+        {
+            "name": "10-Year Note",
+            "patterns": [
+                r"^note.*10.year",
+                r"^10.year.*note",
+                r"^note.*9.year.*(8|9|10|11).month",
+            ],
+        },
         {
             "name": "20-Year Bond",
             "patterns": [
-                "bond.*20.year",
-                "20.year.*bond",
-                "bond.*19.year.*1[01].month",
+                r"^bond.*20.year",
+                r"^20.year.*bond",
+                r"^bond.*19.year.*(8|9|10|11).month",
             ],
         },
     ]
 
     # Define standard security types (original plus 5-Year Note and 30-Year Bond)
     standard_security_types = minimum_security_types + [
-        {"name": "5-Year Note", "patterns": ["note.*5.year", "5.year.*note"]},
+        {
+            "name": "5-Year Note",
+            "patterns": [
+                r"^note.*5.year",
+                r"^5.year.*note",
+                r"^note.*4.year.*(8|9|10|11).month",
+            ],
+        },
         {
             "name": "30-Year Bond",
             "patterns": [
-                "bond.*30.year",
-                "30.year.*bond",
-                "bond.*29.year.*1[01].month",
+                r"^bond.*30.year",
+                r"^30.year.*bond",
+                r"^bond.*29.year.*(8|9|10|11).month",
             ],
         },
     ]
@@ -449,7 +555,15 @@ def main() -> None:
                     "CONFIRMED" if auction.get("is_announced", False) else "TENTATIVE"
                 )
                 desc = f"Status: {status}\nDetails: {auction.get('details', 'N/A')}"
-                events.append({"title": title, "date": date_str, "desc": desc})
+                events.append(
+                    {
+                        "title": title,
+                        "date": date_str,
+                        "desc": desc,
+                        "term": auction["security_type"],
+                        "auction_date": auction["auction_date"],
+                    }
+                )
                 if debug_mode:
                     print(f"Added event: {title}")
             except Exception as e:
@@ -487,7 +601,15 @@ def main() -> None:
                             f"Original Security Type: {auction['security_type']}\n"
                             f"Details: {auction.get('details', 'N/A')}"
                         )
-                        events.append({"title": title, "date": date_str, "desc": desc})
+                        events.append(
+                            {
+                                "title": title,
+                                "date": date_str,
+                                "desc": desc,
+                                "term": interest_type["name"],
+                                "auction_date": auction["auction_date"],
+                            }
+                        )
                         if debug_mode:
                             print(f"Added event: {title}")
                         matched = True
@@ -508,7 +630,12 @@ def main() -> None:
         ics_text = format_ics(events)
         with open(output_file, "w") as f:
             f.write(ics_text)
-        print(f"✅ Calendar saved as: {output_file} with {len(events)} events")
+        print(f"✅ Calendar saved as: {output_file} with {len(events)} events\n")
+        print(f"Events added to {output_file}:")
+        for event in events:
+            term = event.get("term", event.get("title", ""))
+            auction_date = event.get("auction_date", event.get("date", ""))
+            print(f"  [{term}] [{auction_date}]")
         if args.import_calendar:
             open_file(output_file)
     else:
