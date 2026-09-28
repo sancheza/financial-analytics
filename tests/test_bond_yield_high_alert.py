@@ -405,12 +405,6 @@ def test_synthesized_presets_render_playable_wave(preset, tmp_path, monkeypatch)
     assert peak == pytest.approx(alert.PEAK_AMPLITUDE * 32767, abs=2)
 
 
-def test_applescript_string_escapes_quotes_and_newlines():
-    """The popup message is escaped for AppleScript string literals."""
-    escaped = alert.applescript_string('a "b"\nc\td')
-    assert escaped == '"a \\"b\\"\\nc\\td"'
-
-
 def stub_source(monkeypatch, series):
     """Replace the live fetcher with per-source (intraday, daily) fixtures."""
     def fake_fetch(source, requests_module):

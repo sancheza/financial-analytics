@@ -64,11 +64,13 @@ import re
 import subprocess
 import sys
 import time
+import tkinter as tk
 import wave
 from array import array
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from tkinter import font as tkfont
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -142,6 +144,27 @@ BOND_SERIES: dict[str, tuple[str, str]] = {
     "10Y_TIPS": ("10-Year TIPS", "10Y_TIPS"),
 }
 
+# Short form of each series' label for the popup window's table, keyed by the
+# `source` element of BOND_SERIES rather than by bond_type, since several
+# bond_type keys (e.g. "2Y" and "2Y_NOTE") share one source.
+SHORT_LABELS: dict[str, str] = {
+    "2Y": "2Y Note",
+    "10Y": "10Y Note",
+    "20Y": "20Y Bond",
+    "30Y": "30Y Bond",
+    "10Y_TIPS": "10Y TIPS",
+}
+
+POPUP_BG = "#1e1e1e"
+POPUP_SEPARATOR = "#3a3a3a"
+POPUP_WARNING_FG = "#c9a45c"
+POPUP_HEADER_FG = "#e8e8e8"
+POPUP_LABEL_FG = "#d6d6d6"
+POPUP_VALUE_FG = "#8fb996"
+POPUP_META_FG = "#8a8a8a"
+POPUP_FOOTER_FG = "#7a7a7a"
+POPUP_PADDING = 18
+
 SAMPLE_RATE = 44100
 PEAK_AMPLITUDE = 0.89
 FADE_SECONDS = 0.005
@@ -196,6 +219,7 @@ class SeriesResult:
 
     bond_type: str
     label: str
+    short_label: str
     current_time: datetime
     current_value: float
     high_value: float
@@ -440,6 +464,7 @@ def evaluate_series(
     return SeriesResult(
         bond_type=bond_type,
         label=label,
+        short_label=SHORT_LABELS.get(source, label),
         current_time=current_time,
         current_value=newest.close,
         high_value=high_value,
@@ -533,14 +558,6 @@ def sound_file_for(preset: str) -> Path:
     return path
 
 
-def applescript_string(value: str) -> str:
-    """Escape a string for use as an AppleScript string literal."""
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    escaped = escaped.replace("\r", "").replace("\n", "\\n")
-    escaped = escaped.replace("\t", "\\t")
-    return f'"{escaped}"'
-
-
 def system_output_volume() -> int | None:
     """Return the current macOS output volume, or None if unavailable."""
     try:
@@ -569,6 +586,20 @@ def output_is_muted() -> bool:
         return result.stdout.strip() == "true"
     except (OSError, subprocess.SubprocessError):
         return False
+
+
+def has_gui_session() -> bool:
+    """Return whether this user has an active GUI (Aqua) login session.
+
+    The gui-domain LaunchAgent this script installs only fires when one
+    exists, but a manual run over SSH, or a Mac sitting at the login window
+    with no one signed in, has none -- and tkinter cannot open a window
+    without one.
+    """
+    result = launchctl("print", f"gui/{os.getuid()}")
+    if result.returncode != 0:
+        return False
+    return _launchctl_field(result.stdout, "session") == "Aqua"
 
 
 def sound_command(sound: SoundOptions) -> tuple[list[str], str] | None:
@@ -641,8 +672,103 @@ def play_alert_sound(sound: SoundOptions) -> str:
     return description
 
 
-def send_macos_alert(message: str, dry_run: bool, sound: SoundOptions) -> None:
-    """Play the alert sound and show a modal alert until it is acknowledged."""
+def show_alert_window(results: list[SeriesResult]) -> None:
+    """Show the qualifying series in a native popup window until dismissed."""
+    root = tk.Tk()
+    root.title(ALERT_TITLE)
+    root.configure(bg=POPUP_BG)
+    root.resizable(False, False)
+    root.attributes("-topmost", True)
+
+    header_font = tkfont.Font(family="Helvetica", size=13)
+    mono_font = tkfont.Font(family="Menlo", size=12)
+    small_font = tkfont.Font(family="Helvetica", size=10)
+
+    headline = (
+        f"{len(results)} series just made a new "
+        f"{LOOKBACK_TRADING_DAYS}-trading-day high"
+    )
+
+    header = tk.Frame(root, bg=POPUP_BG)
+    header.pack(fill="x", padx=POPUP_PADDING, pady=(POPUP_PADDING, 10))
+    tk.Label(
+        header, text="⚠", fg=POPUP_WARNING_FG, bg=POPUP_BG, font=("Helvetica", 15)
+    ).pack(side="left", padx=(0, 8))
+    tk.Label(
+        header, text=headline, fg=POPUP_HEADER_FG, bg=POPUP_BG, font=header_font
+    ).pack(side="left")
+
+    tk.Frame(root, bg=POPUP_SEPARATOR, height=1).pack(fill="x", padx=POPUP_PADDING)
+
+    table = tk.Frame(root, bg=POPUP_BG)
+    table.pack(fill="x", padx=POPUP_PADDING, pady=10)
+    for result in results:
+        row = tk.Frame(table, bg=POPUP_BG)
+        row.pack(fill="x", pady=3)
+        tk.Label(
+            row,
+            text=result.short_label,
+            fg=POPUP_LABEL_FG,
+            bg=POPUP_BG,
+            font=mono_font,
+            width=9,
+            anchor="w",
+        ).pack(side="left")
+        tk.Label(
+            row,
+            text=f"{result.current_value:.3f}%",
+            fg=POPUP_VALUE_FG,
+            bg=POPUP_BG,
+            font=mono_font,
+            width=8,
+            anchor="e",
+        ).pack(side="left")
+        tk.Label(
+            row,
+            text=(
+                f"  ↑ was {result.high_value:.3f}% · "
+                f"{result.high_date.strftime('%b %d')}"
+            ),
+            fg=POPUP_META_FG,
+            bg=POPUP_BG,
+            font=small_font,
+            anchor="w",
+        ).pack(side="left")
+
+    tk.Frame(root, bg=POPUP_SEPARATOR, height=1).pack(fill="x", padx=POPUP_PADDING)
+
+    footer = tk.Frame(root, bg=POPUP_BG)
+    footer.pack(fill="x", padx=POPUP_PADDING, pady=(8, POPUP_PADDING))
+    as_of = max(result.current_time for result in results)
+    tk.Label(
+        footer,
+        text=f"as of {as_of.strftime('%H:%M %Z')}",
+        fg=POPUP_FOOTER_FG,
+        bg=POPUP_BG,
+        font=small_font,
+    ).pack(side="left")
+
+    buttons = tk.Frame(footer, bg=POPUP_BG)
+    buttons.pack(side="right")
+    tk.Button(
+        buttons,
+        text="View Log",
+        relief="flat",
+        padx=10,
+        command=lambda: subprocess.Popen(["/usr/bin/open", str(LOG_FILE)]),
+    ).pack(side="left", padx=(0, 8))
+    tk.Button(buttons, text="OK", relief="flat", padx=14, command=root.destroy).pack(
+        side="left"
+    )
+
+    root.eval("tk::PlaceWindow . center")
+    root.mainloop()
+
+
+def send_macos_alert(
+    results: list[SeriesResult], message: str, dry_run: bool, sound: SoundOptions
+) -> None:
+    """Play the alert sound and show a popup window until it is acknowledged."""
     if dry_run:
         resolved = sound_command(sound)
         planned = "no sound" if resolved is None else resolved[1]
@@ -660,14 +786,16 @@ def send_macos_alert(message: str, dry_run: bool, sound: SoundOptions) -> None:
     played = play_alert_sound(sound)
     log(f"Played alert sound: {played}")
 
-    script = (
-        f"display alert {applescript_string(ALERT_TITLE)} "
-        f"message {applescript_string(message)}"
-    )
+    if not has_gui_session():
+        raise RuntimeError(
+            "no GUI session is available for this user (headless run or no one "
+            "signed in); cannot show a popup"
+        )
+
     try:
-        subprocess.run(["/usr/bin/osascript", "-e", script], check=True)
-    except (OSError, subprocess.SubprocessError) as error:
-        raise RuntimeError(f"macOS popup failed: {error}") from error
+        show_alert_window(results)
+    except tk.TclError as error:
+        raise RuntimeError(f"popup window failed: {error}") from error
 
 
 def log(message: str) -> None:
@@ -1133,7 +1261,7 @@ def report_results(
         print(colorize("Qualifying series:", f"{BOLD}{CYAN}"))
         print(colorize(message, GREEN))
         try:
-            send_macos_alert(message, dry_run, sound)
+            send_macos_alert(qualifying, message, dry_run, sound)
         except RuntimeError as error:
             if not dry_run:
                 log(f"ERROR: {error}")
