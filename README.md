@@ -230,7 +230,7 @@ This script calculates the total return for Treasury bonds. It uses the Newton-R
 > - thefuzz
 
 ### bond_yield_high_alert
-This script monitors configured Treasury maturity series (2Y, 10Y, 20Y, 30Y, and 10Y TIPS) against their own lookback highs using Webull's intraday yield data, and plays a sound and shows a persistent popup when a yield makes a new lookback high. The comparison uses the window measured before the live print, so a level that merely holds does not re-alert. Configure the series in `.env`:
+This script monitors configured Treasury maturity series (2Y, 10Y, 20Y, 30Y, and 10Y TIPS) against their own lookback highs using Webull's intraday yield data, and plays a sound and shows a persistent popup when a yield makes a new lookback high. The comparison uses the window measured before the live print, so a level that merely holds does not re-alert. The popup requires an active GUI (Aqua) login session; running it headless (e.g. over SSH with no one signed in) fails with a clear error instead of showing anything. Configure the series in `.env`:
 
 ```
 BOND_TYPES=2Y_NOTE,10Y_NOTE,20Y_BOND,30Y_BOND,10Y_TIPS
@@ -287,6 +287,7 @@ Other alert sounds: `--sound` takes `asset` (the bundled MP3, default), `beeps`,
 > - Python 3.10 or later
 > - requests
 > - python-dotenv
+> - tkinter (Tcl/Tk) for the popup — a Homebrew Python install needs `brew install python-tk`
 
 ### finra_bond_fetcher
 This script fetches Treasury security reference and last-trade data from FINRA's public Fixed Income data service. It was the original data source for `bond_market_analyzer.py` but is now dormant (kept in the codebase and reachable via `--source finra`) after being superseded by `webull_bond_fetcher.py`, due to an unreliable reference coupon field and stale pricing for thinly-traded CUSIPs.
