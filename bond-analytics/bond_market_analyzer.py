@@ -20,7 +20,7 @@ from pathlib import Path
 from datetime import datetime
 from calculate_YTW import calculate_ytw_bey
 import finra_bond_fetcher
-import webull_bond_fetcher
+from core import webull_bond_fetcher
 
 VERSION = "1.4.0"
 # v1.4.0: Switched default fetch source from FINRA to Webull (live bid/ask/last;

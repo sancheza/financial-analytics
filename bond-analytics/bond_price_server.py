@@ -41,7 +41,7 @@ from datetime import datetime
 from functools import partial
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
-import webull_bond_fetcher
+from core import webull_bond_fetcher
 
 VERSION = "1.0.0"
 

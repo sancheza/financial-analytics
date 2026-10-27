@@ -9,9 +9,9 @@ at 17:00).
 Configuration lives in this directory's .env file:
 
     CUSIP=91282CMM0,912810UF3,...   comma-separated list to report
-    GMAIL_USER=you@gmail.com         Gmail address used to log in and send
-    GMAIL_PASS=...                   Gmail app password (not the login password)
-    EMAIL_TO=you@gmail.com           optional; defaults to GMAIL_USER
+    SMTP_USERNAME=you@gmail.com      Gmail address used to log in and send
+    SMTP_APP_PASSWORD=...            Gmail app password (not the login password)
+    EMAIL_TO=you@gmail.com           optional; defaults to SMTP_USERNAME
 
 Data source, in priority order per CUSIP:
   1. Webull's live quote (webull_bond_fetcher.fetch_treasury_price) -- price
@@ -49,7 +49,7 @@ from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
 
-import webull_bond_fetcher
+from core import webull_bond_fetcher
 import finra_bond_fetcher
 from bond_return_calc import price_from_yield
 
@@ -237,11 +237,11 @@ def build_body(records: list[dict]) -> str:
 
 
 def send_email(records: list[dict]) -> None:
-    user = os.getenv("GMAIL_USER")
-    password = os.getenv("GMAIL_PASS")
+    user = os.getenv("SMTP_USERNAME")
+    password = os.getenv("SMTP_APP_PASSWORD")
     to_addr = os.getenv("EMAIL_TO") or user
     if not user or not password:
-        raise RuntimeError("Missing GMAIL_USER/GMAIL_PASS in .env; cannot send email.")
+        raise RuntimeError("Missing SMTP_USERNAME/SMTP_APP_PASSWORD in .env; cannot send email.")
 
     body = build_body(records)
     msg = MIMEText(body)
@@ -288,9 +288,9 @@ def print_help():
 
     print(f"\n{BOLD}{CYAN}CONFIG{RESET}  (this directory's .env)")
     print("  CUSIP=91282CMM0,912810UF3,...   comma-separated list to report")
-    print("  GMAIL_USER=you@gmail.com         Gmail address used to log in and send")
-    print("  GMAIL_PASS=...                   Gmail app password (not the login password)")
-    print("  EMAIL_TO=you@gmail.com           optional; defaults to GMAIL_USER")
+    print("  SMTP_USERNAME=you@gmail.com     Gmail address used to log in and send")
+    print("  SMTP_APP_PASSWORD=...           Gmail app password (not the login password)")
+    print("  EMAIL_TO=you@gmail.com          optional; defaults to SMTP_USERNAME")
 
     print(f"\n{BOLD}{CYAN}DATA SOURCES{RESET}  (per CUSIP, in priority order)")
     print(f"  {GREEN}webull{RESET} (primary)    Live quote -- real price, timestamped to the second.")
@@ -345,8 +345,8 @@ def main():
         print(f"ERROR: email send failed: {e}", file=sys.stderr)
         return 1
 
-    log(f"Email sent to {os.getenv('EMAIL_TO') or os.getenv('GMAIL_USER')}")
-    print(f"Email sent to {os.getenv('EMAIL_TO') or os.getenv('GMAIL_USER')}")
+    log(f"Email sent to {os.getenv('EMAIL_TO') or os.getenv('SMTP_USERNAME')}")
+    print(f"Email sent to {os.getenv('EMAIL_TO') or os.getenv('SMTP_USERNAME')}")
     return 0
 
 
