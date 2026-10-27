@@ -2,6 +2,47 @@
 
 This repo contains python scripts and libre office functions for performing financial analytics.
 
+## Setup
+
+**Starting Host & Directory:** this Mac, `~/dev/financial-analytics`
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -e .
+```
+
+Expected output: the last command ends with `Successfully installed financial-analytics-0.0.0`.
+
+> [!IMPORTANT]
+> `core/` and `quote_server/` are importable only inside this repo's virtualenv, after `pip install -e .`. Run every Python tool in this repo with the venv's Python.
+
+**Run a tool (either way):**
+
+```bash
+.venv/bin/python bond-analytics/bond_price_server.py
+```
+
+```bash
+source .venv/bin/activate
+python bond-analytics/bond_price_server.py
+```
+
+Expected output of `.venv/bin/python -c "import core; print(core.__file__)"`:
+
+```
+/Users/<user>/dev/financial-analytics/core/__init__.py
+```
+
+**Troubleshooting**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `ImportError: cannot import name 'webull_bond_fetcher' from 'core' (/Users/<user>/dev/<other-repo>/core/__init__.py)` | A global `python3` that has another repo's `core` installed | Run with `.venv/bin/python` |
+| `ModuleNotFoundError: No module named 'core'` or `'quote_server'` | `pip install -e .` has not been run in `.venv` | `.venv/bin/pip install -e .` |
+| `ModuleNotFoundError: No module named 'fastapi'` (or another package) | Dependencies not installed in `.venv` | `.venv/bin/pip install -r requirements.txt` |
+| A LaunchAgent fails to start with one of the errors above | Its plist points at a different Python | Re-run its install script with `.venv/bin/python` |
+
 ## API Keys and Environment Variables
 
 This project uses API keys from various financial data providers. For security, all API keys should be stored in environment variables instead of in the code.
@@ -318,13 +359,21 @@ This script generates and installs the macOS LaunchAgent that runs `bond_market_
 > - Python 3.10 or later (macOS only)
 > - Standard library only
 
-### webull_bond_fetcher
-This script fetches near-real-time Treasury bond quotes (last price, bid/ask, yield, coupon) and historical price/yield series from Webull's public quote page by CUSIP, via a page-scrape rather than an official API. It's the active/default data source for `bond_market_analyzer.py` and `bond_price_server.py`.
+### webull_bond_fetcher (`core/webull_bond_fetcher.py`)
+This module fetches near-real-time Treasury bond quotes (last price, bid/ask, yield, coupon) and historical price/yield series from Webull's public quote page by CUSIP, via a page-scrape rather than an official API. It's the active/default data source for `bond_market_analyzer.py` and `bond_price_server.py`.
 
 > **Dependencies**
 > - Python 3.10 or later
 > - requests
 
+
+## Quote Server
+
+Serves stock and Treasury bond prices to spreadsheets on `127.0.0.1`. Full usage, API, LibreOffice Calc integration (`GETQUOTE()`), error codes, and troubleshooting: [`quote_server/README.md`](quote_server/README.md).
+
+```bash
+quote_server/scripts/start_quote_server.sh
+```
 
 ## LibreOffice Macros
 

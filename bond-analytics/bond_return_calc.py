@@ -9,7 +9,7 @@ from typing import Tuple, List, Optional
 from scipy.optimize import newton
 from dateutil.relativedelta import relativedelta
 from get_bond_yield import fetch_auction_yield
-from webull_bond_fetcher import fetch_treasury_price
+from core.webull_bond_fetcher import fetch_treasury_price
 import math
 import argparse
 import traceback

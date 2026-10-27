@@ -30,7 +30,7 @@ BOND_DIR = os.path.join(
 sys.path.insert(0, BOND_DIR)
 
 import bond_yield_high_alert as alert  # noqa: E402
-from webull_bond_fetcher import YieldBar  # noqa: E402
+from core.webull_bond_fetcher import YieldBar  # noqa: E402
 
 MARKET_TZ = ZoneInfo("America/New_York")
 SESSION_DAYS = 7

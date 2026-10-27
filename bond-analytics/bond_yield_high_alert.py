@@ -74,7 +74,7 @@ from tkinter import font as tkfont
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import webull_bond_fetcher
+from core import webull_bond_fetcher
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
