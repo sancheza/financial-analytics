@@ -32,7 +32,8 @@ class QuoteCache:
                 return False
             self._entries[symbol] = {
                 "kind": kind, "status": PENDING, "fields": {},
-                "fetched_at": None, "failures": 0, "error": None,
+                "fetched_at": None, "failures": 0, "error_code": None, "error": None,
+                "wants": [], "field_errors": {},
             }
             return True
 
@@ -47,26 +48,58 @@ class QuoteCache:
         with self._lock:
             return [(s, e["kind"]) for s, e in self._entries.items()]
 
-    def set_ok(self, symbol: str, fields: dict) -> None:
-        """Store a successful fetch."""
+    def want(self, symbol: str, field: str) -> bool:
+        """Record that a sheet asked for an optional field, so each refresh fetches it.
+
+        Returns:
+            True when the field was not wanted before.
+        """
+        with self._lock:
+            wants = self._entries[symbol]["wants"]
+            if field in wants:
+                return False
+            wants.append(field)
+            return True
+
+    def wanted(self) -> dict[str, list[str]]:
+        """Return symbol -> optional fields asked for, for symbols that have any."""
+        with self._lock:
+            return {s: list(e["wants"]) for s, e in self._entries.items() if e["wants"]}
+
+    def set_ok(self, symbol: str, fields: dict, field_errors: dict | None = None) -> None:
+        """Store a successful fetch.
+
+        Args:
+            symbol: A registered symbol.
+            fields: The values obtained.
+            field_errors: field -> {"code", "message", "retryable"} for optional fields that were
+                asked for and could not be obtained, while the rest was.
+        """
         with self._lock:
             entry = self._entries[symbol]
             entry.update(status=OK, fields=dict(fields), fetched_at=time.time(),
-                         failures=0, error=None)
+                         failures=0, error_code=None, error=None,
+                         field_errors=dict(field_errors or {}))
 
-    def set_not_found(self, symbol: str) -> None:
-        """Record that the provider has no data for the symbol."""
+    def set_not_found(self, symbol: str, message: str) -> None:
+        """Record that the provider answered that it has no listing for the symbol."""
         with self._lock:
             entry = self._entries[symbol]
-            entry.update(status=NOT_FOUND, fields={}, fetched_at=None,
-                         error="provider has no listing")
+            entry.update(status=NOT_FOUND, fields={}, fetched_at=None, failures=0,
+                         error_code=NOT_FOUND, error=message)
 
-    def set_failure(self, symbol: str, error: str) -> None:
-        """Record a fetch error. Any earlier value is kept and served as stale."""
+    def set_failure(self, symbol: str, code: str, message: str) -> None:
+        """Record a failed fetch. Any earlier value is kept and served as stale.
+
+        Args:
+            symbol: A registered symbol.
+            code: Failure code shown in the spreadsheet (NO_NETWORK, RATE_LIMITED, ...).
+            message: One sentence in plain words naming the cause.
+        """
         with self._lock:
             entry = self._entries[symbol]
             entry["failures"] += 1
-            entry["error"] = error
+            entry.update(error_code=code, error=message)
             if not entry["fields"]:
                 entry["status"] = UPSTREAM
 
@@ -90,6 +123,12 @@ class QuoteCache:
             loaded = json.loads(self._path.read_text())
         except (OSError, ValueError):
             return 0
+        if not isinstance(loaded, dict) or not all(isinstance(e, dict) for e in loaded.values()):
+            return 0
+        for entry in loaded.values():
+            entry.setdefault("error_code", None)   # files written before failure codes existed
+            entry.setdefault("wants", [])          # files written before optional fields existed
+            entry.setdefault("field_errors", {})
         with self._lock:
             self._entries.update(loaded)
             return len(loaded)

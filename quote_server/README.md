@@ -4,11 +4,12 @@ Serves stock and Treasury bond prices to spreadsheets over HTTP on `127.0.0.1`. 
 
 | Item | Value |
 |---|---|
-| Stock source | yfinance |
+| Stock source | yfinance (Yahoo Finance) |
 | Bond source | Webull, through `core/webull_bond_fetcher.py` |
 | Address | `http://127.0.0.1:8765` |
 | Refresh interval | 300 seconds. Set by `REFRESH_SECONDS` in `scripts/run_quote_server.py`; override with `--refresh-seconds` |
 | Symbol list (persistent) | `data/quote_server_cache.json`. Deleting it forgets every symbol; prices are refetched when requested again |
+| Source blocks (persistent) | `data/quote_server_blocks.json`, next to the cache file. Records which price source refused requests and until when. Both files are ignored by git; copy them to back them up |
 | Log | The terminal for a foreground run; `logs/quote_server.log` for the LaunchAgent |
 
 ## 1. Set up
@@ -42,7 +43,7 @@ The script creates the repo's virtualenv at `~/dev/financial-analytics/.venv`, i
 ```
 
 ```
-2026-10-26 17:04:35 INFO quote_server 1.0.0 starting on 127.0.0.1:8765, refresh every 300s, 0 symbols loaded
+2026-10-26T21:04:35Z INFO:     quote_server 1.0.0 starting on 127.0.0.1:8765, refresh every 300s, 0 symbols loaded
 ```
 
 Stop with Ctrl+C.
@@ -55,9 +56,10 @@ Stop with Ctrl+C.
 >
 > ```
 > Loaded com.<user>.quoteserver. Log: /Users/<user>/dev/financial-analytics/logs/quote_server.log
+> Server answering on port 8765: refresh every 300.0 s, 50 symbols
 > ```
 >
-> The agent starts at login and restarts the server if it exits.
+> The agent starts at login and restarts the server if it exits. Run the installer again to update it; it waits for the running server to stop (about 5 seconds), loads the new one, and prints `Server answering` only when the server responds on its port.
 
 ### Options
 
@@ -65,10 +67,58 @@ Stop with Ctrl+C.
 |---|---|---|---|
 | `--refresh-seconds N` | start script, agent installer | 300 | Seconds between full refreshes. Minimum 5 |
 | `--port N` | start script, agent installer | 8765 | Port on `127.0.0.1` |
-| `--cache-file PATH` | start script | `data/quote_server_cache.json` | Where the symbol list is kept |
+| `--cache-file PATH` | start script | `data/quote_server_cache.json` | Where the symbol list is kept. The source-block file is kept in the same folder |
+| `--request-delay N` | start script | 0.25 | Seconds between the starts of two requests to one price source |
+| `--restart-on-hang` | start script; the agent installer always sets it | off | Exit when the refresh stops or hangs, so the LaunchAgent starts a new server (section 8.2) |
 | `--dry-run` | agent installer | | Print the plist; change nothing |
 | `--uninstall` | agent installer | | Unload and delete the LaunchAgent |
 | `-h`, `-v` | all scripts | | Help, version |
+
+### 2.1 Change the refresh interval
+
+The interval is the time between full refreshes of every symbol. Default 300 seconds; minimum 5.
+
+**Starting Host & Directory:** this Mac, any directory
+
+```bash
+~/dev/financial-analytics/.venv/bin/python ~/dev/financial-analytics/quote_server/scripts/install_launch_agent.py --refresh-seconds 60
+```
+
+```
+Loaded com.<user>.quoteserver. Log: /Users/<user>/dev/financial-analytics/logs/quote_server.log
+Server answering on port 8765: refresh every 60.0 s, 50 symbols
+```
+
+The installer rewrites the LaunchAgent and restarts the server; the restart takes about 5 seconds. Run it without `--refresh-seconds` to return to 300.
+
+> **Alternate: foreground run**
+>
+> ```bash
+> ~/dev/financial-analytics/quote_server/scripts/start_quote_server.sh --refresh-seconds 60
+> ```
+>
+> ```
+> 2026-10-26T21:04:35Z INFO:     quote_server 1.0.0 starting on 127.0.0.1:8765, refresh every 60s, 0 symbols loaded
+> ```
+
+**Check the interval in use:**
+
+```bash
+curl -s http://127.0.0.1:8765/health
+```
+
+```
+{"status":"ok",...,"refresh_seconds":60.0,...}
+```
+
+| Item | Where |
+|---|---|
+| Interval in use | `refresh_seconds` in `/health` |
+| Time of the last full refresh | `last_cycle_at` in `/health` (epoch seconds; `date -r <value>` converts it) |
+| Each refresh and its duration | `grep refreshed ~/dev/financial-analytics/logs/quote_server.log \| tail` |
+| Interval the LaunchAgent starts with | `grep -A8 ProgramArguments ~/Library/LaunchAgents/com.$(whoami).quoteserver.plist` (no `--refresh-seconds` line means 300) |
+
+The interval also sets when a price is stale (1.5 intervals) and expired (3 intervals), and how long the watchdog waits (3 intervals plus 60 seconds). A short interval sends more requests. The next interval starts when a refresh finishes, and 50 symbols take about 12 seconds at the default request spacing, so an interval shorter than that runs refreshes back to back.
 
 ## 3. Test the server
 
@@ -106,11 +156,11 @@ The tests use fake price sources, so they need no network and the server need no
 **Starting Host & Directory:** this Mac, any directory
 
 ```bash
-~/dev/financial-analytics/.venv/bin/python -m pytest ~/dev/financial-analytics/tests/test_quote_server.py ~/dev/financial-analytics/tests/test_calc_quote_client.py -q
+~/dev/financial-analytics/.venv/bin/python -m pytest ~/dev/financial-analytics/tests/test_quote_server.py ~/dev/financial-analytics/tests/test_quote_server_resilience.py ~/dev/financial-analytics/tests/test_quote_server_watchdog.py ~/dev/financial-analytics/tests/test_quote_server_yield.py ~/dev/financial-analytics/tests/test_install_launch_agent.py ~/dev/financial-analytics/tests/test_http_client.py ~/dev/financial-analytics/tests/test_calc_quote_client.py -q
 ```
 
 ```
-84 passed
+235 passed
 ```
 
 ## 4. Request a price
@@ -135,7 +185,7 @@ The first request for a new symbol returns `PENDING` (section 8). The fetch star
 | `GET /quote?symbol=912810UF3&field=ytw` | One bond field |
 | `POST /batch-refresh` | Registers symbols, queues an immediate refresh, returns each symbol's cached result |
 | `POST /refresh-all?wait=5` | Refreshes every known symbol now; returns when finished or after `wait` seconds (`complete` is `false` on timeout) |
-| `GET /health` | Version, symbol count, refresh interval, time of the last full refresh |
+| `GET /health` | Status (`ok`, or `degraded` when the refresh thread has stopped), version, symbol count, refresh interval, time of the last full refresh |
 
 ### Fields
 
@@ -145,6 +195,22 @@ The first request for a new symbol returns `PENDING` (section 8). The fetch star
 | Bond (9-character CUSIP) | `price` | Percent of par |
 | Bond | `ytw` | Yield to worst, percent |
 | Bond | `term` | Years to maturity |
+| Stock | `dividend_yield` | Dividend yield, percent, from Yahoo Finance. `0` when Yahoo confirms the stock pays no dividend |
+| Stock or bond | `yield` | The yield that fits the symbol: `ytw` for a bond, `dividend_yield` for a stock |
+
+`yield` lets one formula cover a column that mixes bonds and stocks: `=GETQUOTE(A2; "yield")`. The response `field` shows the field used (`ytw` or `dividend_yield`). `ytw` on a stock and `dividend_yield` on a bond return `BAD_FIELD`.
+
+**Dividend yield.** The value is Yahoo Finance's `dividendYield`, the forward yield, in percent (6.48 means 6.48%). It is fetched with one extra request, only for stocks a sheet has asked `yield` or `dividend_yield` for; the first request returns `PENDING`.
+
+| Yahoo Finance reports | Result |
+|---|---|
+| A yield above 0 | The yield |
+| A yield of 0 **and** 0 dividends over the last 12 months | `0` |
+| A yield of 0 but dividends over the last 12 months, or no 12-month total | Error `NO_DIVIDEND_DATA` |
+| No yield (a money-market fund, an index, a renamed ticker) | Error `NO_DIVIDEND_DATA` |
+| A yield more than 3 times away from `dividendRate / price` | Error `SOURCE_CHANGED` (the units may have changed) |
+
+The price of a stock is returned whatever happens to its yield.
 
 A 9-character symbol is treated as a CUSIP and must pass the CUSIP check digit. A ticker may carry an exchange suffix (`0700.HK`, `7203.T`). A bare number is rejected with `NEED_TICKER_OR_CUSIP`.
 
@@ -192,10 +258,16 @@ curl -s http://127.0.0.1:8765/health
 ```
 
 ```json
-{"status":"ok","version":"1.0.0","symbols":5,"refresh_seconds":300,"last_cycle_at":1793000000.0}
+{"status":"ok","version":"1.0.0","symbols":5,"refresher_alive":true,"refresh_seconds":300,"last_cycle_at":1793000000.0,"started_at":1792990000.0,"restart_on_hang":true,"sources":{"Webull":{"status":"ok","requests":7,"failed_calls":0},"Yahoo Finance":{"status":"ok","requests":44,"failed_calls":0}}}
 ```
 
-`last_cycle_at` is `null` until the first full refresh finishes.
+| Field | Meaning |
+|---|---|
+| `status` | `ok`, or `degraded` when `refresher_alive` is `false`. Restart the server when degraded |
+| `last_cycle_at` | Time of the last full refresh; `null` until the first one finishes |
+| `started_at` | When the server started |
+| `restart_on_hang` | `true` when the server exits if its refresh stops (section 8.2) |
+| `sources` | One entry per price source: `status`, `requests`, `failed_calls`. `limited` means the source refused requests and none are sent until `cooldown_until`. `unreachable` means calls to it are being skipped for a few seconds after repeated failures |
 
 **LaunchAgent commands**
 
@@ -311,24 +383,40 @@ AAPL        343.91
 | Recalculate, F9 | No |
 | Data > Calculate > Recalculate Hard (Ctrl+Shift+F9) | Yes, with the server's cached prices; also recalculates every other formula |
 
-A price shown can be up to 5 minutes old, plus the time since the last Refresh Prices. The server marks a price stale after 1.5 refresh intervals, and Calc shows the number until the server reports `STALE` at 3 intervals.
+A price shown can be up to 5 minutes old, plus the time since the last Refresh Prices. The server marks a price stale after 1.5 refresh intervals, and Calc shows the number until the server reports `STALE` at 3 intervals. A failed refresh keeps the last price; the cell shows the cause only once the price is `STALE`.
 
 ### 7.5 What a cell shows
+
+An error cell reads `#ERR: <CODE> - <cause>`. The cause is in plain words; the table lists the fix for each code.
 
 | Cell shows | Cause | Fix |
 |---|---|---|
 | A number | Price from the server's cache | |
 | `#ERR: PENDING` | Symbol is new; the first fetch is running | Quotes > Refresh Prices |
-| `#ERR: NOT_FOUND` | The source has no listing, or no value for that field. A text label that looks like a ticker (such as a header `Price`) also gives this | Check the symbol; confirm the formula refers to the symbol cell |
+| `#ERR: NOT_FOUND` | Yahoo Finance or Webull answered that it has no listing. A text label that looks like a ticker (such as a header `Price`) also gives this | Check the symbol; confirm the formula refers to the symbol cell |
+| `#ERR: NO_DIVIDEND_DATA` | Yahoo Finance does not confirm whether the stock pays a dividend, so the yield is unknown. The price still works | Look the stock up on finance.yahoo.com; a money-market fund or an index has no value |
+| `#ERR: NO_FIELD` | The symbol is priced but the source supplied no value for that field (for example `ytw`) | Use `price`, or check the bond on webull.com |
 | `#ERR: NEED_TICKER_OR_CUSIP` | The cell holds a number. A ticker or a CUSIP must be submitted. An 8-digit number is usually a CUSIP that lost its leading zero | Refer to the symbol cell; format a CUSIP column as Text |
 | `#ERR: AMBIGUOUS_SYMBOL` | The cell contains more than one CUSIP | Keep one CUSIP per cell |
 | `#ERR: BAD_SYMBOL` | Text that is not a ticker and holds no valid CUSIP, or a CUSIP failing its check digit | Correct the symbol; a ticker must be alone in its cell |
-| `#ERR: BAD_FIELD` | Field not offered for that symbol type | Stocks: `price`. Bonds: `price`, `term`, `ytw` |
-| `#ERR: STALE` | Last good price is older than 3 refresh intervals | Check the network; read the server log |
-| `#ERR: UPSTREAM` | The price source failed and no earlier price exists | Check the network; read the server log |
+| `#ERR: BAD_FIELD` | Field not offered for that symbol type | Stocks: `price`, `dividend_yield`, `yield`. Bonds: `price`, `term`, `ytw`, `yield` |
+| `#ERR: NO_NETWORK` | The server cannot reach Yahoo Finance or Webull | Check the internet connection; the server retries on its own (section 8.1) |
+| `#ERR: SOURCE_TIMEOUT` | The source did not answer in time | None; the server retries on its own |
+| `#ERR: RATE_LIMITED` | The source is limiting requests | None; the server asks again at the next full refresh |
+| `#ERR: SOURCE_REFUSED` | The source refused the request (HTTP 401 or 403) | Wait; if it persists, the source blocks this Mac |
+| `#ERR: SOURCE_DOWN` | The source answered HTTP 5xx | None; the server retries on its own |
+| `#ERR: SOURCE_ERROR` | The source answered another HTTP error | Read the server log |
+| `#ERR: SOURCE_CHANGED` | Webull's page or price could not be read | Section 9, Webull row; the server code needs an update |
+| `#ERR: NO_DATA` | Yahoo Finance answered with no price rows | None; the server retries on its own |
+| `#ERR: LOCAL_CACHE` | yfinance could not open its cache files in `~/Library/Caches/py-yfinance` | Check that folder's permissions and free disk space |
+| `#ERR: INTERNAL` | The server hit a bug on this symbol | Read the server log |
+| `#ERR: UPSTREAM` | The failure reason is not recorded | Quotes > Refresh Prices |
+| `#ERR: STALE` | Last good price is older than 3 refresh intervals. The cell gives the age and why the last refresh failed | Fix the cause named in the cell |
+| `#ERR: REFRESH_STOPPED` | The server's refresh thread has stopped | Restart the server (section 6) |
 | `#ERR: OFFLINE` | The server is not running, or an earlier lookup failed in the last 10 seconds | Start the server (section 2), then Quotes > Refresh Prices |
 | `#ERR: TIMEOUT` | The server did not answer within 0.5 seconds | Quotes > Refresh Prices; if it repeats, restart the server |
 | `#ERR: BAD_RESPONSE` | The server's reply was not readable | Confirm port 8765 is the quote server (`curl -s http://127.0.0.1:8765/health`) |
+| `#ERR: NO_VALUE` | The server answered without a number for that field | Read the server log |
 | `#ERR: CLIENT` | The Python client did not load | Section 7.2, then run the installer again |
 | `Err:508` | Argument separator does not match Calc's setting | Section 7.3, Entering symbols |
 
@@ -355,7 +443,7 @@ After one failed lookup, every `GETQUOTE` cell shows `#ERR: OFFLINE` for 10 seco
 
 ## 8. Error codes
 
-An error response is `{"error": {"code": "...", "message": "..."}}`.
+An error response is `{"error": {"code": "...", "message": "..."}}`. The message is the cause in plain words; Calc shows it after the code.
 
 | HTTP | Code | Cause | Fix |
 |---|---|---|---|
@@ -363,10 +451,60 @@ An error response is `{"error": {"code": "...", "message": "..."}}`.
 | 400 | `NEED_TICKER_OR_CUSIP` | The value is a number (`5`, `1234.5`, `-3`). The message says to submit a ticker or a CUSIP | Submit a ticker or CUSIP; an 8-digit number is a CUSIP missing its leading zero |
 | 400 | `AMBIGUOUS_SYMBOL` | The text contains more than one valid CUSIP; the message lists them | Submit one CUSIP |
 | 400 | `BAD_SYMBOL` | Text that is not a ticker and holds no valid CUSIP, or a CUSIP failing its check digit | Correct the symbol |
-| 400 | `BAD_FIELD` | Field not offered for that symbol type | Stocks: `price`. Bonds: `price`, `term`, `ytw` |
-| 404 | `NOT_FOUND` | The source has no listing, or no value for that field. Any ticker-shaped text gets this when the source has no match | Check the symbol; it is retried every cycle |
-| 503 | `UPSTREAM` | The source failed and no earlier price exists | Check the network; read the log |
-| 503 | `STALE` | Last good price is older than 3 refresh intervals | Check the network; read the log |
+| 400 | `BAD_FIELD` | Field not offered for that symbol type | Stocks: `price`, `dividend_yield`, `yield`. Bonds: `price`, `term`, `ytw`, `yield` |
+| 404 | `NOT_FOUND` | The source answered that it has no listing. Any ticker-shaped text gets this when the source has no match | Check the symbol; it is asked again every cycle |
+| 404 | `NO_FIELD` | The symbol is priced but the source supplied no value for that field | Use `price` |
+| 404 | `NO_DIVIDEND_DATA` | Yahoo Finance does not confirm whether the stock pays a dividend | Section 4, Fields |
+| 503 | `NO_NETWORK`, `SOURCE_TIMEOUT`, `SOURCE_DOWN`, `NO_DATA`, `LOCAL_CACHE` | The last fetch failed for a cause that may pass, and no earlier price exists | Section 8.1 |
+| 503 | `RATE_LIMITED`, `SOURCE_REFUSED`, `SOURCE_ERROR`, `SOURCE_CHANGED`, `INTERNAL` | The last fetch failed for a cause that does not pass by retrying at once, and no earlier price exists | Read the message and the log |
+| 503 | `STALE` | Last good price is older than 3 refresh intervals; the message gives the age and the last failure | Fix the cause in the message |
+| 503 | `REFRESH_STOPPED` | The refresh thread has stopped | Restart the server (section 6) |
+
+### 8.1 How the server handles a failed fetch
+
+All requests to Yahoo Finance and Webull go through one HTTP client (`core/http_client.py`).
+
+| Step | Behavior |
+|---|---|
+| Pacing | Requests to one source start at least 0.25 seconds apart (varied by +/-25%), with at most 2 in flight. A refresh of 50 symbols takes about 12 seconds. A symbol requested during a refresh is fetched before the rest of it |
+| Attempts | Each symbol gets up to 3 attempts, waiting about 1 second, then 3 seconds (longer if the source sends `Retry-After`). Only a cause that may pass is retried: no network, timeout, HTTP 5xx, a local cache error |
+| Not retried | A refusal or rate limit (HTTP 401, 403, 429, or an empty 202/204 reply), a Webull page that cannot be read, a bug |
+| Short stop | After 5 failed symbols in a row, the server skips that source for 20 seconds, then tries one symbol. Each source is stopped separately |
+| Block | After a refusal or rate limit, no request goes to that source for 5 minutes; a repeat after that waits 15 minutes, then 60 minutes. The block is kept in `data/quote_server_blocks.json`, so a restart keeps it. The first successful request after the wait clears it. Cells show `RATE_LIMITED` or `SOURCE_REFUSED` with the time requests resume |
+| Quick re-fetch | Symbols that failed for a cause that may pass are fetched again after 15 seconds, then 30, 60, and 120 seconds until they succeed. Other symbols keep their prices |
+| Last price kept | A failed fetch keeps the last good price. The price shows as `STALE` after 3 refresh intervals |
+| Not found | Only an answer from the source that it has no listing gives `NOT_FOUND`. A network or source problem never does |
+| Schedule | The refresh schedule follows the clock, so a refresh that came due while the Mac slept runs within 15 seconds of waking |
+
+**Clear a block by hand:** stop the server, delete `data/quote_server_blocks.json`, start the server. Do this only when the cause is known to be gone; the source may refuse again.
+
+### 8.2 Restart on a stopped or hung refresh
+
+A watchdog thread inside the server checks every 30 seconds that the refresh thread is running and that a full refresh has finished within 3 refresh intervals plus 60 seconds.
+
+| Item | Behavior |
+|---|---|
+| Confirmation | A problem must last 2 minutes before the watchdog acts. A refresh that resumes in that time (for example after the Mac wakes) cancels it |
+| With `--restart-on-hang` | The watchdog shows a macOS notification (`Restarting: <reason>.`), saves the cache, and exits with code 70. The LaunchAgent starts a new server within 10 seconds |
+| Without it | The watchdog logs the problem and shows one notification (`Not refreshing: <reason>. Restart it.`). The server keeps running |
+| LaunchAgent | `install_launch_agent.py` always sets `--restart-on-hang`. Run the installer again after pulling this change |
+
+### 8.3 Request spacing measurements
+
+Sequential requests, slowest spacing first, 2026-10-30. A run stops at the first refusal.
+
+| Source | Spacing | Requests | Refused | Median reply |
+|---|---|---|---|---|
+| Yahoo Finance | 1.0 s | 25 | 0 | 0.09 s |
+| Yahoo Finance | 0.5 s | 25 | 0 | 0.09 s |
+| Yahoo Finance | 0.25 s | 25 | 0 | 0.08 s |
+| Yahoo Finance | 0.1 s | 25 | 0 | 0.02 s (some replies may have come from a cache) |
+| Webull | 1.0 s | 12 | 0 | 0.19 s |
+| Webull | 0.5 s | 12 | 0 | 0.18 s |
+| Webull | 0.25 s | 12 | 0 | 0.14 s |
+| Webull | 0.1 s | 12 | 0 | 0.20 s |
+
+No limit was reached, so 0.25 seconds is a tested spacing, not a measured maximum rate.
 
 ## 9. Troubleshooting
 
@@ -379,6 +517,9 @@ An error response is `{"error": {"code": "...", "message": "..."}}`.
 | `curl: (7) Failed to connect` | Server is not running | Section 2 |
 | `LibreOffice is running. Quit it (Cmd+Q)...` | The installer needs LibreOffice closed | Quit LibreOffice, run the installer again |
 | `No Standard library at ...` (installer) | The LibreOffice profile has never been created | Start LibreOffice once, quit it, run the installer again |
+| `launchctl bootstrap failed (...Input/output error); attempt 1 of 4, retrying in 2 s` (agent installer) | launchd is still removing the old server | None; the installer waits and retries |
+| `launchctl could not load com.<user>.quoteserver after 4 attempts` (agent installer) | launchd refused the job 4 times. The server is not running | Run the `launchctl bootstrap` command the message prints; if it fails, read its error and `launchctl print gui/$(id -u)/com.$(whoami).quoteserver` |
+| `The server did not answer on port N within 30 s` (agent installer) | The job is loaded but the server did not start | Read `logs/quote_server.log` |
 | `unopkg failed: ...` (installer) | LibreOffice is still running in the background, or the profile is locked | Quit LibreOffice; check `pgrep -x soffice` prints nothing; run the installer again |
 | `#NAME?` in a cell | The Calc integration is not installed, or LibreOffice was not restarted | Section 7.1, then restart LibreOffice |
 | No Quotes menu | The extension is not installed | Section 7.2 |
@@ -393,8 +534,12 @@ An error response is `{"error": {"code": "...", "message": "..."}}`.
 | Opening a workbook is slow | It waits up to 5 seconds for fresh prices while the server fetches | Keep the server running (LaunchAgent, section 2) so prices are cached |
 | Calc features stopped after a LibreOffice reset or reinstall | The profile was recreated | Section 7.1 |
 | `[Errno 48] address already in use` | Port 8765 is taken, often by an earlier server | `lsof -i :8765`, stop that process, or use `--port` |
-| Bond stays `PENDING` or returns `UPSTREAM` | Webull unreachable or changed its page | Read the log; run `~/dev/financial-analytics/.venv/bin/python -c "from core import webull_bond_fetcher as w; print(w.fetch_treasury_price('912810UF3'))"` |
-| Stock returns `NOT_FOUND` for a real ticker | yfinance reported no data | Retry next cycle; confirm the ticker on finance.yahoo.com |
+| Bond stays `PENDING`, or shows `NO_NETWORK` or `SOURCE_CHANGED` | Webull unreachable or changed its page | Read the log; run `~/dev/financial-analytics/.venv/bin/python -c "from core import webull_bond_fetcher as w; print(w.fetch_treasury_price('912810UF3'))"` |
+| Stock returns `NOT_FOUND` for a real ticker | Yahoo Finance answered that it has no listing | Confirm the ticker on finance.yahoo.com; the server asks again every cycle |
+| Every stock shows `NO_NETWORK` while the internet works | A proxy variable (`HTTPS_PROXY`) is set for the server, or DNS fails for the server only | `launchctl kickstart -k gui/$(id -u)/com.$(whoami).quoteserver`; read the log |
+| `/health` shows `"status":"degraded"`, or cells show `REFRESH_STOPPED` | The refresh thread stopped | Restart the server (section 6) and read the log lines above the traceback. With `--restart-on-hang` the server restarts itself after 2 minutes (section 8.2) |
+| A notification `Quote server: Restarting: ...` | The watchdog found the refresh stopped or hung | Read `logs/quote_server.log` around the time shown |
+| `/health` shows a source as `limited`, or cells show `RATE_LIMITED` | The source refused requests; none are sent until `cooldown_until` | Wait. To clear it early, section 8.1 |
 
 ## 10. Files
 
@@ -402,7 +547,9 @@ An error response is `{"error": {"code": "...", "message": "..."}}`.
 |---|---|
 | `app.py` | HTTP routes and error codes |
 | `cache.py` | Thread-safe cache and symbol-list persistence |
-| `providers.py` | yfinance and Webull lookups |
+| `providers.py` | yfinance and Webull lookups, failure codes and messages |
+| `watchdog.py` | Restarts the server when the refresh stops or hangs |
+| `../core/http_client.py` | HTTP client: pacing, retries, short stop, persistent blocks |
 | `refresher.py` | Background refresh thread |
 | `symbols.py` | Ticker and CUSIP detection |
 | `scripts/run_quote_server.py` | Server entry point |
@@ -413,4 +560,4 @@ An error response is `{"error": {"code": "...", "message": "..."}}`.
 | `libreoffice/calc_quote_client.py` | Calc client: price lookups, error text, Refresh Prices |
 | `libreoffice/QuoteServer.bas` | The `GETQUOTE()` cell function |
 | `libreoffice/extension/` | Quotes menu, toolbar button, refresh on open |
-| `../tests/test_quote_server.py`, `../tests/test_calc_quote_client.py` | Tests |
+| `../tests/test_quote_server.py`, `../tests/test_quote_server_resilience.py`, `../tests/test_quote_server_watchdog.py`, `../tests/test_quote_server_yield.py`, `../tests/test_install_launch_agent.py`, `../tests/test_http_client.py`, `../tests/test_calc_quote_client.py` | Tests |

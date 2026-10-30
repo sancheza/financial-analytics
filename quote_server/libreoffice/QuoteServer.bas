@@ -32,5 +32,5 @@ Function GETQUOTE(symbol As Variant, Optional field As Variant) As Variant
     Exit Function
 Failed:
     oClient = Null
-    GETQUOTE = "#ERR: CLIENT"
+    GETQUOTE = "#ERR: CLIENT - calc_quote_client.py did not load; run install_calc_integration.py again and restart Calc"
 End Function

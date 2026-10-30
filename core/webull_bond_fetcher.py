@@ -77,15 +77,22 @@ def _extract_init_state(html: str) -> dict:
     return json.loads(match.group(1))
 
 
-def fetch_treasury_price(cusip: str, timeout: float = 10.0) -> dict | None:
+def fetch_treasury_price(cusip: str, timeout: float = 10.0, get=None) -> dict | None:
     """Look up a Treasury security's live quote by CUSIP.
+
+    Args:
+        cusip: The 9-character CUSIP.
+        timeout: Seconds before the request gives up.
+        get: Function that makes the GET request, called as `get(url, headers=..., timeout=...)`
+            and returning a response. Default `requests.get`; pass a client's `get` to add
+            retries and pacing.
 
     Returns a dict with coupon/maturity/issuer reference fields plus live pricing
     (last, bid, ask, yield, YTM/YTW, trade timestamp), or None if Webull has no
     listing for this CUSIP.
     """
     url = QUOTE_URL_TEMPLATE.format(cusip=cusip.lower())
-    response = requests.get(url, headers=REQUEST_HEADERS, timeout=timeout)
+    response = (get or requests.get)(url, headers=REQUEST_HEADERS, timeout=timeout)
     response.raise_for_status()
 
     state = _extract_init_state(response.text)
