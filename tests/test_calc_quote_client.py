@@ -72,6 +72,11 @@ def test_returns_float(server):
     assert client.getquote("aapl ") == 343.91
 
 
+def test_a_yield_fraction_is_returned_unchanged(server):
+    server.responses["/quote?symbol=X"] = (200, {"symbol": "X", "field": "yield", "value": 0.0648, "unit": "fraction"}, 0)
+    assert client.getquote("X", "Yield") == 0.0648
+
+
 def test_sends_field_lowercased(server):
     server.responses["/quote?symbol=912810UF3"] = (200, quote_body(5.3), 0)
     assert client.getquote("912810UF3", "YTW") == 5.3

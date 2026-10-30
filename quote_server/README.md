@@ -195,19 +195,25 @@ The first request for a new symbol returns `PENDING` (section 8). The fetch star
 | Bond (9-character CUSIP) | `price` | Percent of par |
 | Bond | `ytw` | Yield to worst, percent |
 | Bond | `term` | Years to maturity |
-| Stock | `dividend_yield` | Dividend yield, percent, from Yahoo Finance. `0` when Yahoo confirms the stock pays no dividend |
-| Stock or bond | `yield` | The yield that fits the symbol: `ytw` for a bond, `dividend_yield` for a stock |
+| Bond | `coupon` | Coupon rate as a fraction (`0.04625` is 4.625%), from Webull. `0` for a zero-coupon security |
+| Stock | `dividend_yield` | Dividend yield as a fraction (`0.0648` is 6.48%), from Yahoo Finance. `0` when Yahoo confirms the stock pays no dividend |
+| Stock or bond | `yield` | The rate that fits the symbol, as a fraction: the **coupon** for a bond, the dividend yield for a stock. A bond's yield to worst is `ytw` |
 
-`yield` lets one formula cover a column that mixes bonds and stocks: `=GETQUOTE(A2; "yield")`. The response `field` shows the field used (`ytw` or `dividend_yield`). `ytw` on a stock and `dividend_yield` on a bond return `BAD_FIELD`.
+**Units.** `yield`, `coupon` and `dividend_yield` are fractions, so a cell formatted as **Percent** shows `4.63%`. `ytw` is the percent number (`5.324` is 5.324%); format a `ytw` cell as Number.
 
-**Dividend yield.** The value is Yahoo Finance's `dividendYield`, the forward yield, in percent (6.48 means 6.48%). It is fetched with one extra request, only for stocks a sheet has asked `yield` or `dividend_yield` for; the first request returns `PENDING`.
+`yield` lets one formula cover a column that mixes bonds and stocks: `=GETQUOTE(A2; "yield")`. The response `field` is the name asked for; `source_field` is the field used (`coupon` or `dividend_yield`) and `unit` is `fraction` or `percent` for a rate field. `ytw` and `term` on a stock, and `dividend_yield` on a bond, return `BAD_FIELD`.
+
+**Coupon.** The source is Webull's `couponRate` for the CUSIP, fetched with the price. A bond with no coupon in Webull's data returns its price, and `coupon` and `yield` return `NO_COUPON`.
+
+**Dividend yield.** The source is Yahoo Finance's `dividendYield`, the forward yield, which the server divides by 100. It is fetched with one extra request, only for stocks a sheet has asked `yield` or `dividend_yield` for; the first request returns `PENDING`.
 
 | Yahoo Finance reports | Result |
 |---|---|
 | A yield above 0 | The yield |
 | A yield of 0 **and** 0 dividends over the last 12 months | `0` |
+| No forward yield, for a stock (type `EQUITY`), with a trailing 12-month dividend rate of 0 **and** a trailing yield of 0 both stated | `0` (Yahoo leaves the forward yield out for a stock that has never paid a dividend, such as `FISV`) |
 | A yield of 0 but dividends over the last 12 months, or no 12-month total | Error `NO_DIVIDEND_DATA` |
-| No yield (a money-market fund, an index, a renamed ticker) | Error `NO_DIVIDEND_DATA` |
+| No yield and no such trailing zeros (a money-market fund such as `VUSXX`, an index, an ETF) | Error `NO_DIVIDEND_DATA` |
 | A yield more than 3 times away from `dividendRate / price` | Error `SOURCE_CHANGED` (the units may have changed) |
 
 The price of a stock is returned whatever happens to its yield.
@@ -230,7 +236,9 @@ A 9-character symbol is treated as a CUSIP and must pass the CUSIP check digit. 
 | Field | Meaning |
 |---|---|
 | `value` | The requested field |
-| `fields` | Every field available for the symbol |
+| `source_field` | The field the value comes from (differs from `field` for `yield`) |
+| `unit` | `fraction` for `yield` and `dividend_yield`, `percent` for `ytw`, `null` otherwise |
+| `fields` | Every field available for the symbol, in the units above (`dividend_yield` as a fraction) |
 | `stale` | `true` when the price is older than 1.5 refresh intervals |
 | `age_seconds` | Seconds since the price was fetched |
 
@@ -334,9 +342,11 @@ Options: `--dry-run` prints the steps and works while LibreOffice is running; `-
 | Formula | Result |
 |---|---|
 | `=GETQUOTE(A1)` | Price of the ticker or CUSIP in A1 |
-| `=GETQUOTE(A1; "ytw")` | Bond yield to worst, percent |
+| `=GETQUOTE(A1; "yield")` | Coupon of a bond or dividend yield of a stock, as a fraction. Format the cell as Percent |
+| `=GETQUOTE(A1; "coupon")` | Bond coupon, as a fraction. Format the cell as Percent |
+| `=GETQUOTE(A1; "ytw")` | Bond yield to worst, as the percent number. Format the cell as Number |
 | `=GETQUOTE(A1; "term")` | Bond years to maturity |
-| `=GETQUOTE($A2; B$1)` | Field named in a header cell (`price`, `ytw`, `term`) |
+| `=GETQUOTE($A2; B$1)` | Field named in a header cell (`price`, `yield`, `coupon`, `ytw`, `term`) |
 
 **Steps (first use)**
 
@@ -394,12 +404,13 @@ An error cell reads `#ERR: <CODE> - <cause>`. The cause is in plain words; the t
 | A number | Price from the server's cache | |
 | `#ERR: PENDING` | Symbol is new; the first fetch is running | Quotes > Refresh Prices |
 | `#ERR: NOT_FOUND` | Yahoo Finance or Webull answered that it has no listing. A text label that looks like a ticker (such as a header `Price`) also gives this | Check the symbol; confirm the formula refers to the symbol cell |
+| `#ERR: NO_COUPON` | Webull gives no coupon for that bond. The price still works | Look the bond up on webull.com |
 | `#ERR: NO_DIVIDEND_DATA` | Yahoo Finance does not confirm whether the stock pays a dividend, so the yield is unknown. The price still works | Look the stock up on finance.yahoo.com; a money-market fund or an index has no value |
 | `#ERR: NO_FIELD` | The symbol is priced but the source supplied no value for that field (for example `ytw`) | Use `price`, or check the bond on webull.com |
 | `#ERR: NEED_TICKER_OR_CUSIP` | The cell holds a number. A ticker or a CUSIP must be submitted. An 8-digit number is usually a CUSIP that lost its leading zero | Refer to the symbol cell; format a CUSIP column as Text |
 | `#ERR: AMBIGUOUS_SYMBOL` | The cell contains more than one CUSIP | Keep one CUSIP per cell |
 | `#ERR: BAD_SYMBOL` | Text that is not a ticker and holds no valid CUSIP, or a CUSIP failing its check digit | Correct the symbol; a ticker must be alone in its cell |
-| `#ERR: BAD_FIELD` | Field not offered for that symbol type | Stocks: `price`, `dividend_yield`, `yield`. Bonds: `price`, `term`, `ytw`, `yield` |
+| `#ERR: BAD_FIELD` | Field not offered for that symbol type | Stocks: `price`, `dividend_yield`, `yield`. Bonds: `price`, `term`, `ytw`, `coupon`, `yield` |
 | `#ERR: NO_NETWORK` | The server cannot reach Yahoo Finance or Webull | Check the internet connection; the server retries on its own (section 8.1) |
 | `#ERR: SOURCE_TIMEOUT` | The source did not answer in time | None; the server retries on its own |
 | `#ERR: RATE_LIMITED` | The source is limiting requests | None; the server asks again at the next full refresh |
@@ -451,9 +462,10 @@ An error response is `{"error": {"code": "...", "message": "..."}}`. The message
 | 400 | `NEED_TICKER_OR_CUSIP` | The value is a number (`5`, `1234.5`, `-3`). The message says to submit a ticker or a CUSIP | Submit a ticker or CUSIP; an 8-digit number is a CUSIP missing its leading zero |
 | 400 | `AMBIGUOUS_SYMBOL` | The text contains more than one valid CUSIP; the message lists them | Submit one CUSIP |
 | 400 | `BAD_SYMBOL` | Text that is not a ticker and holds no valid CUSIP, or a CUSIP failing its check digit | Correct the symbol |
-| 400 | `BAD_FIELD` | Field not offered for that symbol type | Stocks: `price`, `dividend_yield`, `yield`. Bonds: `price`, `term`, `ytw`, `yield` |
+| 400 | `BAD_FIELD` | Field not offered for that symbol type | Stocks: `price`, `dividend_yield`, `yield`. Bonds: `price`, `term`, `ytw`, `coupon`, `yield` |
 | 404 | `NOT_FOUND` | The source answered that it has no listing. Any ticker-shaped text gets this when the source has no match | Check the symbol; it is asked again every cycle |
 | 404 | `NO_FIELD` | The symbol is priced but the source supplied no value for that field | Use `price` |
+| 404 | `NO_COUPON` | Webull gives no coupon for the bond | Use `price` or `ytw` |
 | 404 | `NO_DIVIDEND_DATA` | Yahoo Finance does not confirm whether the stock pays a dividend | Section 4, Fields |
 | 503 | `NO_NETWORK`, `SOURCE_TIMEOUT`, `SOURCE_DOWN`, `NO_DATA`, `LOCAL_CACHE` | The last fetch failed for a cause that may pass, and no earlier price exists | Section 8.1 |
 | 503 | `RATE_LIMITED`, `SOURCE_REFUSED`, `SOURCE_ERROR`, `SOURCE_CHANGED`, `INTERNAL` | The last fetch failed for a cause that does not pass by retrying at once, and no earlier price exists | Read the message and the log |

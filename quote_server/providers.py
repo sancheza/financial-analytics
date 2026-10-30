@@ -67,6 +67,7 @@ NO_DATA = "NO_DATA"
 LOCAL_CACHE = "LOCAL_CACHE"
 INTERNAL = "INTERNAL"
 NO_DIVIDEND_DATA = "NO_DIVIDEND_DATA"
+NO_COUPON = "NO_COUPON"
 
 LOCAL_KIND = "local_cache"   # an http_client error kind of this module's own
 
@@ -184,10 +185,15 @@ def as_failure(exc: BaseException, source: str) -> FetchFailed:
 def dividend_yield_from(info: dict, price: float, symbol: str) -> float:
     """Return the dividend yield in percent from Yahoo's `info` values, or raise.
 
-    A yield of 0 is returned only when Yahoo reports both a 0 yield and 0 dividends over
-    the last 12 months. A missing value, or values that disagree, are not a "no dividend"
-    answer. A positive yield is checked against dividendRate / price, so a change of
-    units in yfinance cannot give a result off by a factor of 100.
+    A yield of 0 is returned only when Yahoo confirms there is no dividend, in one of two ways:
+      - it reports a 0 yield and a 0 trailing 12-month dividend rate; or
+      - it reports no forward yield (it leaves the key out for a stock with no dividend) but
+        states, for a stock (quoteType EQUITY), a trailing 12-month rate of 0 and a trailing
+        yield of 0. A money-market fund also lacks a forward yield and has a 0 rate, but its
+        trailing yield is empty, so it does not qualify.
+    A missing value, or values that disagree, are not a "no dividend" answer. A positive
+    yield is checked against dividendRate / price, so a change of units in yfinance cannot
+    give a result off by a factor of 100.
 
     Raises:
         FetchFailed: NO_DIVIDEND_DATA when Yahoo gives no usable yield or does not confirm
@@ -195,11 +201,15 @@ def dividend_yield_from(info: dict, price: float, symbol: str) -> float:
     """
     value, rate, trailing = (info.get(key) for key in ("dividendYield", "dividendRate",
                                                        "trailingAnnualDividendRate"))
+    trailing_yield, quote_type = info.get("trailingAnnualDividendYield"), info.get("quoteType")
 
     def number(x) -> bool:
         return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x
 
     unconfirmed = f"{STOCK_SOURCE} does not confirm whether {symbol} pays a dividend"
+    if value is None and quote_type == "EQUITY" and rate is None \
+            and number(trailing) and trailing == 0 and number(trailing_yield) and trailing_yield == 0:
+        return 0.0
     if not number(value) or value < 0:
         raise FetchFailed(NO_DIVIDEND_DATA, f"{STOCK_SOURCE} gives no dividend yield for {symbol}; "
                           "it is unknown whether it pays one", retryable=False)
@@ -228,7 +238,8 @@ def fetch_dividend_yield(symbol: str, price: float, client: HttpClient) -> float
     def lookup() -> dict:
         info = yfinance.Ticker(symbol).info
         return {key: info.get(key) for key in ("dividendYield", "dividendRate",
-                                               "trailingAnnualDividendRate")}
+                                               "trailingAnnualDividendRate",
+                                               "trailingAnnualDividendYield", "quoteType")}
 
     return dividend_yield_from(client.call(STOCK_SOURCE, lookup, classify=classify_error), price, symbol)
 
@@ -281,10 +292,11 @@ def fetch_stock(symbol: str, client: HttpClient, wants: tuple[str, ...] = ()) ->
 
 
 def fetch_bond(cusip: str, client: HttpClient, today: date | None = None) -> dict:
-    """Return {"price", "term", "ytw"} for a Treasury CUSIP.
+    """Return {"price", "term", "ytw", "coupon"} for a Treasury CUSIP.
 
-    `term` is years to maturity. `ytw` is a percent. Either is omitted when Webull
-    does not supply it.
+    `term` is years to maturity. `ytw` and `coupon` are percents (4.625 is 4.625%). `term` and
+    `ytw` are omitted when Webull does not supply them. When it supplies no coupon, the price
+    is still returned, in a Fields whose `errors` names `coupon`.
 
     Raises:
         NotFound: Webull has no listing, or no price.
@@ -310,9 +322,15 @@ def fetch_bond(cusip: str, client: HttpClient, today: date | None = None) -> dic
         if quote.get("maturityDate"):
             days = (date.fromisoformat(quote["maturityDate"][:10]) - (today or date.today())).days
             fields["term"] = round(max(days, 0) / 365.25, 2)
+        coupon = quote.get("couponRate")
+        if coupon not in (None, ""):
+            fields["coupon"] = float(coupon)
     except (ValueError, TypeError) as exc:
         raise FetchFailed(SOURCE_CHANGED, f"{BOND_SOURCE} sent a price that could not be "
                           "read", retryable=False) from exc
+    if "coupon" not in fields:
+        return Fields(fields, errors={"coupon": FetchFailed(
+            NO_COUPON, f"{BOND_SOURCE} gives no coupon for {cusip}", retryable=False)})
     return fields
 
 

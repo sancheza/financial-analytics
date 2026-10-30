@@ -14,7 +14,8 @@ from quote_server.refresher import Refresher
 
 
 def info(**values):
-    base = {"dividendYield": None, "dividendRate": None, "trailingAnnualDividendRate": None}
+    base = {"dividendYield": None, "dividendRate": None, "trailingAnnualDividendRate": None,
+            "trailingAnnualDividendYield": None, "quoteType": None}
     return {**base, **values}
 
 
@@ -26,6 +27,8 @@ def info(**values):
     (info(dividendYield=0.31, dividendRate=1.08), 349.0, 0.31),
     (info(dividendYield=0.0, dividendRate=None, trailingAnnualDividendRate=0.0), 238.0, 0.0),
     (info(dividendYield=0, dividendRate=0, trailingAnnualDividendRate=0), 238.0, 0.0),
+    # a stock Yahoo leaves the forward yield out for, with explicit zero trailing figures (FISV)
+    (info(quoteType="EQUITY", trailingAnnualDividendRate=0.0, trailingAnnualDividendYield=0.0), 48.0, 0.0),
 ])
 def test_dividend_yield_values(values, price, expected):
     assert providers.dividend_yield_from(values, price, "X") == expected
@@ -40,6 +43,14 @@ def test_dividend_yield_values(values, price, expected):
     (info(dividendYield=0.0), "does not confirm"),                               # 0, but no 12-month total
     (info(dividendYield=0.0, trailingAnnualDividendRate=2.0), "dividends in the last 12 months"),
     (info(dividendYield=0.0, dividendRate=1.0, trailingAnnualDividendRate=0.0), "does not confirm"),
+    # no forward yield and a 0 rate, but not enough to confirm:
+    (info(quoteType="MONEYMARKET", trailingAnnualDividendRate=0.0), "unknown whether it pays one"),   # VUSXX
+    (info(quoteType="EQUITY", trailingAnnualDividendRate=0.0), "unknown whether it pays one"),         # no trailing yield
+    (info(quoteType="EQUITY", trailingAnnualDividendYield=0.0), "unknown whether it pays one"),        # no trailing rate
+    (info(quoteType="EQUITY", trailingAnnualDividendRate=0.0, trailingAnnualDividendYield=0.01), "unknown whether it pays one"),
+    (info(quoteType="EQUITY", trailingAnnualDividendRate=1.2, trailingAnnualDividendYield=0.0), "unknown whether it pays one"),
+    (info(quoteType="ETF", trailingAnnualDividendRate=0.0, trailingAnnualDividendYield=0.0), "unknown whether it pays one"),
+    (info(quoteType="EQUITY", dividendRate=1.0, trailingAnnualDividendRate=0.0, trailingAnnualDividendYield=0.0), "unknown whether it pays one"),
 ])
 def test_dividend_yield_not_confirmed(values, words):
     with pytest.raises(providers.FetchFailed) as caught:
@@ -197,8 +208,11 @@ def api(tmp_path):
         out = {}
         for symbol, kind in kinds.items():
             wants = (extras or {}).get(symbol, [])
-            if kind == "bond":
-                out[symbol] = {"price": 99.5, "ytw": 4.5, "term": 10.0}
+            if symbol == "912810UV8":
+                out[symbol] = providers.Fields({"price": 99.5, "ytw": 4.5}, errors={"coupon": providers.FetchFailed(
+                    providers.NO_COUPON, "Webull gives no coupon for 912810UV8", retryable=False)})
+            elif kind == "bond":
+                out[symbol] = {"price": 99.5, "ytw": 4.5, "term": 10.0, "coupon": 4.625}
             elif symbol == "NODIV":
                 out[symbol] = providers.Fields({"price": 50.0, "dividend_yield": 0.0})
             elif symbol == "UNKNOWN":
@@ -234,21 +248,68 @@ def wait_for(predicate, timeout=3.0):
     return False
 
 
-def test_yield_of_a_bond_is_yield_to_worst(api):
+def test_yield_of_a_bond_is_its_coupon_as_a_fraction(api):
     get(api, "912810UF3", "yield")
     assert wait_for(lambda: get(api, "912810UF3", "yield").status_code == 200)
     body = get(api, "912810UF3", "yield").json()
-    assert body["value"] == 4.5 and body["field"] == "ytw"
-    assert get(api, "912810UF3", "ytw").json()["value"] == 4.5
+    assert body["value"] == 0.04625 and body["field"] == "yield" and body["source_field"] == "coupon"
+    assert body["unit"] == "fraction" and body["fields"]["coupon"] == 0.04625
+    named = get(api, "912810UF3", "coupon").json()
+    assert named["value"] == 0.04625 and named["field"] == "coupon" and named["unit"] == "fraction"
 
 
-def test_yield_of_a_stock_is_its_dividend_yield(api):
+def test_yield_to_worst_is_still_available_by_name_as_a_percent_number(api):
+    get(api, "912810UF3", "ytw")
+    assert wait_for(lambda: get(api, "912810UF3", "ytw").status_code == 200)
+    direct = get(api, "912810UF3", "ytw").json()
+    assert direct["value"] == 4.5 and direct["unit"] == "percent" and direct["source_field"] == "ytw"
+    assert get(api, "912810UF3", "yield").json()["value"] != direct["value"]     # yield is the coupon, not ytw
+
+
+def test_a_bond_without_a_coupon_still_has_its_price(api):
+    get(api, "912810UV8", "yield")
+    assert wait_for(lambda: get(api, "912810UV8", "yield").status_code != 202)
+    response = get(api, "912810UV8", "yield")
+    assert response.status_code == 404 and response.json()["error"]["code"] == "NO_COUPON"
+    assert "Webull gives no coupon for 912810UV8" in response.json()["error"]["message"]
+    assert get(api, "912810UV8", "price").json()["value"] == 99.5
+
+
+def test_a_bond_saved_before_coupons_existed_answers_pending_then_gets_its_coupon(api):
+    api.cache.register("912810UF3", "bond")
+    api.cache.set_ok("912810UF3", {"price": 99.5, "ytw": 4.5, "term": 10.0})       # an old entry: no coupon
+    first = get(api, "912810UF3", "yield")
+    assert first.status_code == 202 and first.json()["error"]["code"] == "PENDING"
+    assert wait_for(lambda: get(api, "912810UF3", "yield").status_code == 200)
+    assert get(api, "912810UF3", "yield").json()["value"] == 0.04625
+
+
+def test_yield_of_a_stock_is_its_dividend_yield_as_a_fraction(api):
     assert get(api, "VZ", "yield").status_code == 202
     assert wait_for(lambda: get(api, "VZ", "yield").status_code == 200)
     body = get(api, "VZ", "yield").json()
-    assert body["value"] == 4.2 and body["field"] == "dividend_yield" and body["type"] == "stock"
-    assert get(api, "VZ", "dividend_yield").json()["value"] == 4.2
-    assert get(api, "VZ", "price").json()["value"] == 123.45
+    assert body["value"] == 0.042 and body["field"] == "yield" and body["source_field"] == "dividend_yield"
+    assert body["type"] == "stock" and body["unit"] == "fraction"
+    named = get(api, "VZ", "dividend_yield").json()
+    assert named["value"] == 0.042 and named["field"] == "dividend_yield" and named["unit"] == "fraction"
+    assert body["fields"]["dividend_yield"] == 0.042                      # the fields dict agrees with value
+    price = get(api, "VZ", "price").json()
+    assert price["value"] == 123.45 and price["unit"] is None
+
+
+def test_a_percent_formatted_cell_shows_the_right_number(api):
+    """4.2% is served as 0.042: Calc multiplies by 100 for a Percent format and shows 4.2%, not 420%."""
+    get(api, "VZ", "yield")
+    assert wait_for(lambda: get(api, "VZ", "yield").status_code == 200)
+    assert get(api, "VZ", "yield").json()["value"] * 100 == pytest.approx(4.2)
+
+
+def test_one_formula_gives_the_same_unit_for_a_bond_and_a_stock(api):
+    for symbol in ("VZ", "912810UF3"):
+        get(api, symbol, "yield")
+    assert wait_for(lambda: all(get(api, s, "yield").status_code == 200 for s in ("VZ", "912810UF3")))
+    values = {s: get(api, s, "yield").json()["value"] for s in ("VZ", "912810UF3")}
+    assert values == {"VZ": 0.042, "912810UF3": 0.04625}                   # both are fractions
 
 
 def test_asking_for_the_yield_of_a_stock_already_cached_fetches_it(api):
@@ -263,7 +324,7 @@ def test_asking_for_the_yield_of_a_stock_already_cached_fetches_it(api):
 def test_a_stock_without_a_dividend_shows_zero(api):
     get(api, "NODIV", "yield")
     assert wait_for(lambda: get(api, "NODIV", "yield").status_code == 200)
-    assert get(api, "NODIV", "yield").json()["value"] == 0.0
+    assert get(api, "NODIV", "yield").json()["value"] == 0.0 and get(api, "NODIV", "dividend_yield").json()["value"] == 0.0
 
 
 def test_unconfirmed_dividend_is_an_error_that_says_why(api):
@@ -292,6 +353,45 @@ def test_fields_that_do_not_fit_the_symbol_type_are_rejected(api):
     assert "ytw" in bond.json()["error"]["message"]
 
 
-def test_a_bond_never_asks_for_optional_fields(api):
-    get(api, "912810UF3", "yield")
-    assert api.cache.wanted() == {}
+def test_a_bond_coupon_needs_no_extra_request(monkeypatch):
+    calls = []
+
+    def bond(symbol, wants=()):
+        calls.append(wants)
+        return {"price": 1.0}
+
+    providers.fetch_many({"912810UF3": "bond"}, fetch_bond_fn=bond, fetch_stock_fn=bond,
+                         extras={"912810UF3": ["coupon"]})
+    assert calls == [()]                                                   # wants are for stocks only
+
+
+# --- fetch_bond: the coupon --------------------------------------------------------------------
+
+def patch_webull(monkeypatch, quote):
+    monkeypatch.setattr(providers.webull_bond_fetcher, "fetch_treasury_price", lambda cusip, timeout, get: quote)
+
+
+def test_bond_coupon_is_read_as_a_percent(monkeypatch):
+    patch_webull(monkeypatch, {"price": "91.8", "ytw": "5.324", "couponRate": "4.625000", "maturityDate": "2044-11-15"})
+    fields = providers.fetch_bond("912810UF3", fast_client())
+    assert fields["coupon"] == 4.625 and fields["ytw"] == 5.324 and not getattr(fields, "errors", {})
+
+
+def test_a_zero_coupon_is_a_value(monkeypatch):
+    patch_webull(monkeypatch, {"price": "98.5", "couponRate": "0.000000"})
+    assert providers.fetch_bond("912797XX1", fast_client())["coupon"] == 0.0
+
+
+@pytest.mark.parametrize("coupon", [None, ""])
+def test_a_missing_coupon_keeps_the_price_and_names_the_cause(monkeypatch, coupon):
+    patch_webull(monkeypatch, {"price": "91.8", "couponRate": coupon})
+    fields = providers.fetch_bond("912810UF3", fast_client())
+    assert fields == {"price": 91.8}
+    assert fields.errors["coupon"].code == providers.NO_COUPON and not fields.errors["coupon"].retryable
+
+
+def test_an_unreadable_coupon_is_source_changed(monkeypatch):
+    patch_webull(monkeypatch, {"price": "91.8", "couponRate": "n/a"})
+    with pytest.raises(providers.FetchFailed) as caught:
+        providers.fetch_bond("912810UF3", fast_client())
+    assert caught.value.code == providers.SOURCE_CHANGED

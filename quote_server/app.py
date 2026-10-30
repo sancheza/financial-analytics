@@ -24,11 +24,24 @@ MAX_BATCH = 500
 MAX_WAIT_SECONDS = 30.0
 
 FIELDS = {symbols.STOCK: ("price", "dividend_yield", "yield"),
-          symbols.BOND: ("price", "term", "ytw", "yield")}
-# "yield" means the yield that fits the symbol: yield to worst for a bond, dividend yield for a stock.
-YIELD_FIELD = {symbols.STOCK: "dividend_yield", symbols.BOND: "ytw"}
-# Fields fetched only for symbols a sheet asked them for, because each needs its own request.
-OPTIONAL_FIELDS = {symbols.STOCK: ("dividend_yield",), symbols.BOND: ()}
+          symbols.BOND: ("price", "term", "ytw", "coupon", "yield")}
+# "yield" means the yield that fits the symbol: the coupon rate for a bond, the dividend yield for a stock.
+YIELD_FIELD = {symbols.STOCK: "dividend_yield", symbols.BOND: "coupon"}
+# The cache keeps rates in percent, as the sources give them (coupon 4.625 is 4.625%). The API serves
+# `yield`, `dividend_yield` and `coupon` as fractions (0.04625 is 4.625%), so a cell formatted as Percent
+# shows the right number. `ytw` is served as the percent number, as it always has been.
+FRACTION_FIELDS = ("yield", "dividend_yield", "coupon")
+PERCENT_FIELDS = ("dividend_yield", "coupon")   # stored in percent; served as fractions
+
+
+def _as_fraction(percent: float) -> float:
+    return round(percent / 100, 8)
+
+
+# Fields a sheet can ask for that a stored entry may not have yet. A stock's dividend yield needs its own
+# request, made only for symbols that ask for it. A bond's coupon comes with every bond fetch, but an
+# entry saved before it existed lacks it until the next refresh, so it answers PENDING meanwhile.
+OPTIONAL_FIELDS = {symbols.STOCK: ("dividend_yield",), symbols.BOND: ("coupon",)}
 
 log = logging.getLogger("quote_server")
 
@@ -75,6 +88,7 @@ def _lookup(cache: QuoteCache, refresher: Refresher, raw: str, field: str) -> di
         raise _error(400, *symbols.bad_symbol_reason(raw, symbol))
     if field not in FIELDS[kind]:
         raise _error(400, "BAD_FIELD", f"{kind} symbols support: {', '.join(FIELDS[kind])}")
+    requested = field
     field = YIELD_FIELD[kind] if field == "yield" else field
     newly_registered = cache.register(symbol, kind)
     newly_wanted = field in OPTIONAL_FIELDS[kind] and cache.want(symbol, field)
@@ -101,12 +115,18 @@ def _lookup(cache: QuoteCache, refresher: Refresher, raw: str, field: str) -> di
         if field in OPTIONAL_FIELDS[kind]:
             raise _error(202, "PENDING", f"{symbol} {field.replace('_', ' ')} is being fetched; retry shortly")
         raise _error(404, "NO_FIELD", f"{symbol} has no {field}; {_source_name(entry)} did not supply it")
+    fields = {name: _as_fraction(value) if name in PERCENT_FIELDS else value
+              for name, value in entry["fields"].items()}
+    as_fraction = requested in FRACTION_FIELDS
+    served = _as_fraction(entry["fields"][field]) if as_fraction else fields[field]
     return {
         "symbol": symbol,
         "type": kind,
-        "field": field,
-        "value": entry["fields"][field],
-        "fields": entry["fields"],
+        "field": requested,
+        "source_field": field,
+        "unit": "fraction" if as_fraction else ("percent" if field == "ytw" else None),
+        "value": served,
+        "fields": fields,
         "stale": age > refresher.interval * STALE_AFTER_CYCLES,
         "age_seconds": round(age, 1),
     }
