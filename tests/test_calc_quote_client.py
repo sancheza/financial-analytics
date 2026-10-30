@@ -90,28 +90,35 @@ def test_blank_symbol_is_empty_and_makes_no_request(server):
     (503, "STALE"), (503, "UPSTREAM"),
 ])
 def test_server_error_codes_become_err_strings(server, status, code):
-    server.responses["/quote?symbol=X"] = (status, {"error": {"code": code, "message": "m"}}, 0)
-    assert client.getquote("X") == f"#ERR: {code}"
+    server.responses["/quote?symbol=X"] = (status, {"error": {"code": code, "message": "the cause"}}, 0)
+    assert client.getquote("X") == f"#ERR: {code} - the cause"
 
 
-def test_non_numeric_value_is_not_found(server):
+def test_non_numeric_value_names_the_field(server):
     server.responses["/quote?symbol=X"] = (200, quote_body(None), 0)
-    assert client.getquote("X") == "#ERR: NOT_FOUND"
+    assert client.getquote("X", "ytw") == "#ERR: NO_VALUE - the quote server returned no number for ytw"
+
+
+def test_error_without_message_still_explains(server):
+    server.responses["/quote?symbol=X"] = (503, {"error": {"code": "UPSTREAM"}}, 0)
+    assert client.getquote("X") == "#ERR: UPSTREAM - the quote server reported an error"
 
 
 def test_garbage_response_is_bad_response(server):
     server.httpd.RequestHandlerClass.do_GET = lambda self: (
         self.send_response(200), self.send_header("Content-Length", "3"), self.end_headers(),
         self.wfile.write(b"not"))
-    assert client.getquote("X") == "#ERR: BAD_RESPONSE"
+    result = client.getquote("X")
+    assert result.startswith("#ERR: BAD_RESPONSE - ") and "port" in result
 
 
 def test_offline_and_breaker(monkeypatch):
     monkeypatch.setattr(client, "SERVER_URL", "http://127.0.0.1:1")
     client._unblock()
-    assert client.getquote("AAPL") == "#ERR: OFFLINE"
+    first = client.getquote("AAPL")
+    assert first.startswith("#ERR: OFFLINE - ") and "http://127.0.0.1:1" in first and "start it" in first
     started = time.monotonic()
-    assert client.getquote("MSFT") == "#ERR: OFFLINE"   # answered by the breaker
+    assert client.getquote("MSFT") == first   # answered by the breaker
     assert time.monotonic() - started < 0.05
     client._unblock()
 
@@ -120,17 +127,18 @@ def test_timeout_and_breaker(server, monkeypatch):
     monkeypatch.setattr(client, "TIMEOUT_SEC", 0.1)
     server.responses["/quote?symbol=SLOW"] = (200, quote_body(1.0), 0.5)
     started = time.monotonic()
-    assert client.getquote("SLOW") == "#ERR: TIMEOUT"
+    timed_out = client.getquote("SLOW")
+    assert timed_out.startswith("#ERR: TIMEOUT - ") and "0.1 s" in timed_out
     assert time.monotonic() - started < 0.4
     server.requests.clear()
-    assert client.getquote("SLOW") == "#ERR: OFFLINE"
+    assert client.getquote("SLOW").startswith("#ERR: OFFLINE - ")
     assert server.requests == []
 
 
 def test_breaker_expires(server, monkeypatch):
     monkeypatch.setattr(client, "OFFLINE_RETRY_SECONDS", 0.05)
     client._block()
-    assert client.getquote("X") == "#ERR: OFFLINE"
+    assert client.getquote("X").startswith("#ERR: OFFLINE - ")
     time.sleep(0.06)
     server.responses["/quote?symbol=X"] = (200, quote_body(2.5), 0)
     assert client.getquote("X") == 2.5

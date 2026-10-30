@@ -123,10 +123,10 @@ def test_cache_failure_keeps_last_value():
     cache = QuoteCache()
     cache.register("AAPL", "stock")
     cache.set_ok("AAPL", {"price": 2.0})
-    cache.set_failure("AAPL", "net down")
+    cache.set_failure("AAPL", "NO_NETWORK", "cannot reach Yahoo Finance")
     entry = cache.get("AAPL")
     assert entry["status"] == "OK" and entry["fields"] == {"price": 2.0}
-    assert entry["failures"] == 1
+    assert entry["failures"] == 1 and entry["error_code"] == "NO_NETWORK"
 
 
 def test_cache_is_thread_safe():
@@ -147,17 +147,17 @@ def test_cache_is_thread_safe():
 
 def test_fetch_bond_computes_term(monkeypatch):
     monkeypatch.setattr(providers.webull_bond_fetcher, "fetch_treasury_price",
-                        lambda cusip, timeout: {"price": "91.8", "ytw": "5.36",
-                                                "maturityDate": "2036-01-01"})
-    fields = providers.fetch_bond("912810UF3", today=date(2026, 1, 1))
+                        lambda cusip, timeout, get: {"price": "91.8", "ytw": "5.36",
+                                                     "maturityDate": "2036-01-01"})
+    fields = providers.fetch_bond("912810UF3", providers.make_client(), today=date(2026, 1, 1))
     assert fields == {"price": 91.8, "ytw": 5.36, "term": 10.0}
 
 
 def test_fetch_bond_without_listing_raises(monkeypatch):
     monkeypatch.setattr(providers.webull_bond_fetcher, "fetch_treasury_price",
-                        lambda cusip, timeout: None)
+                        lambda cusip, timeout, get: None)
     with pytest.raises(providers.NotFound):
-        providers.fetch_bond("912810UF3")
+        providers.fetch_bond("912810UF3", providers.make_client())
 
 
 def test_fetch_many_reports_errors_per_symbol():
@@ -166,7 +166,7 @@ def test_fetch_many_reports_errors_per_symbol():
             raise providers.NotFound(symbol)
         return {"price": 1.0}
 
-    out = providers.fetch_many({"OK": "stock", "BAD": "stock"}, fetch_stock_fn=stock)
+    out = providers.fetch_many({"OK": "stock", "BAD": "stock"}, fetch_stock_fn=stock, fetch_bond_fn=stock)
     assert out["OK"] == {"price": 1.0} and isinstance(out["BAD"], providers.NotFound)
 
 
@@ -220,7 +220,8 @@ def test_error_codes(client):
     assert wait_for(lambda: client.get("/quote", params={"symbol": "MISSING"}).status_code == 404)
     client.get("/quote", params={"symbol": "BROKEN"})
     assert wait_for(lambda: client.get("/quote", params={"symbol": "BROKEN"}).status_code == 503)
-    assert client.get("/quote", params={"symbol": "BROKEN"}).json()["error"]["code"] == "UPSTREAM"
+    error = client.get("/quote", params={"symbol": "BROKEN"}).json()["error"]
+    assert error["code"] == "INTERNAL" and "ValueError" in error["message"] and "boom" not in error["message"]
 
 
 def test_stale_and_expired(client):
@@ -263,7 +264,7 @@ def test_refresh_all_with_no_symbols(client):
 
 def test_health(client):
     body = client.get("/health").json()
-    assert body["status"] == "ok" and body["refresh_seconds"] == 300
+    assert body["status"] == "ok" and body["refresh_seconds"] == 300 and body["refresher_alive"] is True
 
 
 def test_symbols_survive_restart(tmp_path):

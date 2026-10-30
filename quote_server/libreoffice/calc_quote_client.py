@@ -31,6 +31,9 @@ OFFLINE_RETRY_SECONDS = 10.0
 # Refresh Prices and document open wait at most this long for fresh prices.
 REFRESH_WAIT_SECONDS = 5.0
 
+OFFLINE_MESSAGE = ("the quote server is not reachable at {url}; start it, "
+                   "then Quotes > Refresh Prices")
+
 FORMULA_MARKER = "GETQUOTE("
 CELL_FLAG_FORMULA = 16  # com.sun.star.sheet.CellFlags.FORMULA
 
@@ -56,6 +59,11 @@ def _is_timeout(exc: BaseException) -> bool:
         isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, (socket.timeout, TimeoutError)))
 
 
+def _err(code: str, message: str) -> str:
+    """Format an error cell: the code to test for, then the cause in plain words."""
+    return f"#ERR: {code} - {message}"
+
+
 def _call(method: str, path: str, params: dict | None = None,
           timeout: float | None = None) -> dict:
     """Send one request and return the decoded JSON body.
@@ -79,36 +87,43 @@ def _call(method: str, path: str, params: dict | None = None,
 
 
 def getquote(symbol, field="price"):
-    """Return a price for a ticker or CUSIP, or an '#ERR: ...' string.
+    """Return a price for a ticker or CUSIP, or an '#ERR: <CODE> - <cause>' string.
 
     Args:
         symbol: Ticker or CUSIP. A blank symbol returns an empty string.
         field: price (default), ytw, or term. Bonds only for ytw and term.
 
     Returns:
-        A float, '' for a blank symbol, or '#ERR: <CODE>' where CODE is a server
-        error code (PENDING, NOT_FOUND, BAD_SYMBOL, BAD_FIELD, UPSTREAM, STALE),
-        OFFLINE, TIMEOUT, or BAD_RESPONSE.
+        A float, '' for a blank symbol, or '#ERR: <CODE> - <cause in plain words>'.
+        CODE is a server error code (PENDING, NOT_FOUND, NO_FIELD, BAD_SYMBOL,
+        NO_NETWORK, RATE_LIMITED, STALE, ...; see the README) or one of OFFLINE,
+        TIMEOUT, BAD_RESPONSE, NO_VALUE. The cause comes from the server.
     """
     symbol = str(symbol if symbol is not None else "").strip().upper()
     if not symbol:
         return ""
     field = str(field if field is not None else "").strip().lower() or "price"
     if _blocked():
-        return "#ERR: OFFLINE"
+        return _err("OFFLINE", OFFLINE_MESSAGE.format(url=SERVER_URL))
     try:
         body = _call("GET", "/quote", {"symbol": symbol, "field": field})
     except (urllib.error.URLError, OSError) as exc:
         _block()
-        return "#ERR: TIMEOUT" if _is_timeout(exc) else "#ERR: OFFLINE"
+        if _is_timeout(exc):
+            return _err("TIMEOUT", f"the quote server did not answer within {TIMEOUT_SEC:g} s; "
+                                   "try Quotes > Refresh Prices")
+        return _err("OFFLINE", OFFLINE_MESSAGE.format(url=SERVER_URL))
     except ValueError:
-        return "#ERR: BAD_RESPONSE"
+        return _err("BAD_RESPONSE", f"the reply from {SERVER_URL} is not a quote server reply; "
+                                    "check the port")
     if "error" in body:
-        return "#ERR: " + str(body["error"].get("code", "ERROR"))
+        error = body["error"] if isinstance(body["error"], dict) else {}
+        return _err(str(error.get("code", "ERROR")),
+                    str(error.get("message") or "the quote server reported an error"))
     value = body.get("value")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return float(value)
-    return "#ERR: NOT_FOUND"
+    return _err("NO_VALUE", f"the quote server returned no number for {field}")
 
 
 def _is_spreadsheet(doc) -> bool:

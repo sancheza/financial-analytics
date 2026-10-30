@@ -129,6 +129,27 @@ To understand how Quote Server operates, each architectural piece and external l
 - **Why it is used here**: Eliminates the need for users to manually open a terminal and run startup commands every time they log in or restart their computer.
 - **How it interacts**: Managed by `quote_server/scripts/install_launch_agent.py`, which generates and loads `com.<user>.quoteserver.plist` pointing to `quote_server/scripts/run_quote_server.py`.
 
+#### 11. Failure classification (`providers.as_failure`)
+- **What it does**: Turns any lookup error into a `FetchFailed` with a code, a plain-words message, and two flags: `retryable` (ask again soon) and `blocks_source` (stop asking that source for the rest of the batch).
+- **Why it is used here**: yfinance returns an empty result for network errors unless `yfinance.config.debug.hide_exceptions` is `False`, which `providers.py` sets at import. With it set, an unknown ticker (`YFTickerMissingError`, or HTTP 404) is told apart from a network, timeout, or rate-limit error.
+- **Where it sits**: `core/http_client.py` classifies the error (kind, `retryable`, `blocks_host`) and applies pacing, retries, the short stop, and blocks. `quote_server/providers.py` adds the yfinance-specific cases (`YFRateLimitError`, a sqlite cache error) through the `classify` argument of `HttpClient.call`, and turns the result into a code and a plain-words message.
+- **Codes**: `NO_NETWORK`, `SOURCE_TIMEOUT`, `RATE_LIMITED`, `SOURCE_REFUSED`, `SOURCE_DOWN`, `SOURCE_ERROR`, `SOURCE_CHANGED`, `NO_DATA`, `LOCAL_CACHE`, `INTERNAL`. README section 7.5 lists each with its fix.
+
+
+#### 12. Shared HTTP client (`core.http_client`)
+- **What it is**: `HttpClient`, built to dev ADR 0023: settings are constructor arguments, nothing happens at import, the package logger has a `NullHandler`, and a client has `close()` and works in a `with` block.
+- **What it does**: `get(url, host=...)` and `call(host, fn, classify=...)` apply the host's rules: a `Pacer` (minimum delay with jitter, cap on requests in flight), retries with growing waits that honor `Retry-After`, a `HostBreaker` (opens after 5 failed calls in a row for 20 seconds, then allows one trial), and a `BlockStore` (a refusal stops the host for 5, 15, then 60 minutes and survives a restart). A 4xx other than 401, 403, and 429 counts as the host having answered.
+- **Why it is used here**: one place for the rules in dev ADR 0014 section 2.3 and 2.4. Webull is called through `get`; yfinance owns its network layer, so its call goes through `call`.
+- **How it interacts**: `providers.make_client()` builds it; `run_quote_server.py` passes it to `fetch_many` and `create_app` (the `sources` part of `/health`). Only `quote_server` uses it; other scripts in the repo still call `requests` directly.
+
+#### 13. Optional fields and `yield` (`providers.fetch_dividend_yield`, `app._lookup`)
+- **What it does**: `yield` resolves by symbol type (`ytw` for a bond, `dividend_yield` for a stock). A stock's dividend yield needs its own Yahoo request (`Ticker.info`), so it is fetched only for symbols whose entry lists it in `wants`. `fetch_stock` returns a `Fields` dict: the price, plus `errors` for a wanted field that failed, so a failed yield never costs the price.
+- **When 0 is returned**: only when Yahoo reports `dividendYield` 0 and `trailingAnnualDividendRate` 0 (and no `dividendRate`). Missing or disagreeing values give `NO_DIVIDEND_DATA`. A positive yield must lie within a factor of 3 of `dividendRate / price`, which catches a change of units in yfinance.
+- **API**: a wanted field that is absent and has no `field_errors` entry answers `PENDING`; one with an entry answers its code (404, or 503 when `retryable`).
+
+#### 14. Watchdog (`quote_server.watchdog`)
+- **What it does**: every 30 seconds checks `refresher.alive` and that a full refresh has finished within 3 intervals plus 60 seconds. A problem that lasts 2 minutes shows a macOS notification (`osascript`, text passed as arguments) and, with `--restart-on-hang`, saves the cache (5-second limit) and calls `os._exit(70)`. The LaunchAgent (`KeepAlive`) starts a new server.
+- **Why it is in the process**: the cases it covers are a dead or stuck refresh thread; a process that does not answer at all is not covered.
 ### 2.3 Cache Characteristics, Lifecycle & Storage Architecture
 
 The cache (`QuoteCache` in `quote_server/cache.py`) is the central state holder for Quote Server. It manages in-memory data access, concurrency synchronization, staleness tracking, and persistence to disk.
@@ -146,7 +167,10 @@ Cache entries are stored in a private Python dictionary (`_entries`) guarded by 
     },
     "fetched_at": 1793000123.45,
     "failures": 0,
-    "error": null
+    "error_code": null,
+    "error": null,
+    "wants": [],
+    "field_errors": {}
   },
   "912810UF3": {
     "kind": "bond",
@@ -170,7 +194,10 @@ Cache entries are stored in a private Python dictionary (`_entries`) guarded by 
 | `fields` | `dict` | Key-value mapping of market data fields (`price`, `ytw`, `term`). Empty while pending or not found. |
 | `fetched_at` | `float \| null` | UNIX epoch timestamp of the last successful fetch. `null` if never successfully retrieved. |
 | `failures` | `int` | Count of consecutive upstream fetch failures since the last successful quote. |
-| `error` | `str \| null` | Error message string from the most recent failed fetch attempt. |
+| `error_code` | `str \| null` | Code of the most recent failure (`NO_NETWORK`, `RATE_LIMITED`, ...), or `"NOT_FOUND"`. `null` after a success. |
+| `error` | `str \| null` | The most recent failure's cause in plain words, as shown in the spreadsheet. No exception text. |
+| `wants` | `list[str]` | Optional fields a sheet has asked for (`"dividend_yield"`). Each refresh fetches them for this symbol only. |
+| `field_errors` | `dict` | `field -> {code, message, retryable}` for a wanted field that could not be obtained while the price was. Cleared by the next successful fetch. |
 
 #### 2. Eviction Policy, TTL, and Staleness Windows
 Unlike traditional web caches (e.g., Redis LRU eviction), Quote Server **does not evict or purge symbols by time-to-live (TTL)**. Once a symbol is registered, it remains in memory and is continuously polled on each refresh cycle.
@@ -192,12 +219,13 @@ Freshness is governed by **staleness and expiration multipliers** relative to th
   - API responses continue returning HTTP 200 with the last-known value, but set `"stale": true`. This allows spreadsheet models to keep working during transient network hiccups.
 - **Expired Window ($\text{age} > 3.0 \times T$)**:
   - The quote is older than 3.0 cycles (exceeds 900s / 15 minutes).
-  - The API ceases serving the value and returns HTTP 503 `{"error": {"code": "STALE", "message": "<symbol> price is ... s old"}}`. Calc displays `#ERR: STALE`.
+  - The API ceases serving the value and returns HTTP 503 `{"error": {"code": "STALE", "message": "<symbol> price is <age> old; the last refresh failed: <cause>"}}`. Calc displays `#ERR: STALE - <message>`.
 
 #### 3. Graceful Degradation & Upstream Failure Retention
 When a background fetch fails for a symbol:
 - **Existing Symbol (Prior Value Available)**: The server increments `failures`, records `error`, but **preserves existing `fields`**. Status remains `"OK"`. The last-known price is served as stale until 3 cycles elapse.
-- **New Symbol (Cold Failure)**: If no previous price exists, the status transitions to `"UPSTREAM"`, returning HTTP 503 until a future refresh cycle succeeds.
+- **New Symbol (Cold Failure)**: If no previous price exists, the status transitions to `"UPSTREAM"`. The API returns HTTP 503 with the failure's own code (`NO_NETWORK`, `RATE_LIMITED`, ...) until a refresh succeeds.
+- **Not found is an answer**: `"NOT_FOUND"` is stored only when the source answers that it has no listing. A failure never replaces a price with `"NOT_FOUND"`.
 
 #### 4. Persistence & Atomic File Writes
 The entire cache dictionary is persisted to disk at `data/quote_server_cache.json` after every refresh batch:
@@ -314,14 +342,16 @@ sequenceDiagram
     end
 ```
 
-1. **Wait & Wake**: The refresher thread pauses on `_wake.wait(timeout=interval)`. It wakes when the 300-second timer expires or when an urgent signal is received from an API endpoint.
-2. **Batch Compilation**: If awakened urgently, it extracts the queued urgent symbols. If awakened by timeout, it grabs all registered symbols.
-3. **Concurrent Execution**: The refresher passes symbols to `providers.fetch_many()`. A `ThreadPoolExecutor` with 8 worker threads queries `yfinance` for stocks and `webull_bond_fetcher` for Treasury bonds simultaneously.
+1. **Wait & Wake**: The refresher thread waits on `_wake.wait()` for at most 15 seconds (`POLL_SECONDS`). Its deadlines (the next full refresh, the next quick re-fetch) are wall-clock times checked after every wait, so a deadline that passed while the Mac slept is honored within 15 seconds of waking. An urgent signal from an API endpoint ends the wait at once.
+2. **Batch Compilation**: The batch is the queued urgent symbols; plus the symbols due for a quick re-fetch; or every registered symbol when the full refresh is due. The batch is fetched 10 symbols at a time; between chunks, symbols requested in the meantime are fetched first, so a paced refresh does not delay a new symbol.
+3. **Concurrent Execution**: The refresher passes symbols to `providers.fetch_many()`. A `ThreadPoolExecutor` with 8 worker threads queries `yfinance` for stocks and `webull_bond_fetcher` for Treasury bonds simultaneously. Every request goes through one `core.http_client.HttpClient`: requests to a source are spaced 0.25 s apart with at most 2 in flight, a failure that may pass is retried up to 3 attempts (waits of about 1 and 3 seconds), a source is skipped for 20 s after 5 failed symbols in a row, and a refusal or rate limit stops the source for 5, 15, then 60 minutes (kept in `data/quote_server_blocks.json`).
 4. **Cache Updates**:
    - Successful fetches invoke `cache.set_ok()`, updating the price, timestamp, and resetting failures to 0.
-   - Unlisted symbols invoke `cache.set_not_found()`.
-   - Network errors invoke `cache.set_failure()`. If an older price exists, it is retained; otherwise, status becomes `UPSTREAM`.
-5. **Atomic Persistence**: Once the batch updates are applied, `cache.save()` writes the cache out to disk via a temporary file and atomic rename.
+   - A `NotFound` result (the source answered it has no listing) invokes `cache.set_not_found(symbol, message)`.
+   - A `FetchFailed` result invokes `cache.set_failure(symbol, code, message)`. If an older price exists, it is retained; otherwise, status becomes `UPSTREAM`.
+   - Symbols that failed with a retryable cause are fetched again after 15, 30, 60, then 120 seconds (`RETRY_DELAYS_SECONDS`) until they succeed.
+5. **Error isolation**: An unexpected error in a refresh is logged with its traceback and the batch is retried; it never ends the thread. `/health` reports `refresher_alive`, and the API answers `REFRESH_STOPPED` if the thread is gone.
+6. **Atomic Persistence**: Once the batch updates are applied, `cache.save()` writes the cache out to disk via a temporary file and atomic rename.
 
 ### 3.4 LibreOffice Calc Integration Flow
 When a user works inside LibreOffice Calc, the integration follows a coordinated path designed to prevent spreadsheet freezing:
@@ -329,11 +359,12 @@ When a user works inside LibreOffice Calc, the integration follows a coordinated
 1. **Cell Evaluation**: A user types `=GETQUOTE("AAPL")` in cell `B2`.
 2. **Basic Routing**: LibreOffice invokes the Basic function in `QuoteServer.bas`.
 3. **Client Call**: Basic delegates to `calc_quote_client.py` using LibreOffice's script framework.
-4. **Circuit Breaker Check**: The client checks if the server was previously unreachable within the last 10 seconds. If so, it returns `#ERR: OFFLINE` immediately without making a network call, preventing Calc from hanging.
+4. **Circuit Breaker Check**: The client checks if the server was previously unreachable within the last 10 seconds. If so, it returns `#ERR: OFFLINE - <cause>` immediately without making a network call, preventing Calc from hanging.
 5. **Fast HTTP Lookup**: The client executes an HTTP GET to `http://127.0.0.1:8765/quote?symbol=AAPL` with a strict 0.5-second timeout.
 6. **Result Display**:
    - If the symbol is cached: the numeric price appears in the cell.
-   - If the symbol is new: the cell displays `#ERR: PENDING`. The server begins fetching the quote in the background.
+   - If the symbol is new: the cell displays `#ERR: PENDING - <message>`. The server begins fetching the quote in the background.
+   - If the lookup failed: the cell displays `#ERR: <CODE> - <cause in plain words>`, with the server's code and message (README section 7.5).
 7. **Refresh Prices Trigger**: The user clicks **Quotes > Refresh Prices** (or reopens the sheet). Calc calls `/refresh-all`, waits up to 5 seconds for the background fetch to finish, and forces Calc to recalculate all `=GETQUOTE()` cells, displaying updated numbers.
 
 ---
@@ -351,7 +382,7 @@ curl -s http://127.0.0.1:8765/health
 
 Expected output:
 ```json
-{"status":"ok","version":"1.0.0","symbols":3,"refresh_seconds":300,"last_cycle_at":1793000000.0}
+{"status":"ok","version":"1.0.0","symbols":3,"refresher_alive":true,"refresh_seconds":300,"last_cycle_at":1793000000.0}
 ```
 
 ### 4.2 Querying Stock Quotes
@@ -561,14 +592,14 @@ The persistent cache file is located at `~/dev/financial-analytics/data/quote_se
 | **In-Memory Cache** | Systems Architecture | Storing operational data directly in volatile RAM memory (dictionaries) rather than querying a database or disk on every request, providing near-zero retrieval latency. |
 | **LaunchAgent** | macOS System Tool | A configuration profile managed by macOS `launchd` that executes and supervises background services in the context of the currently logged-in user. |
 | **Mutex Lock (`threading.Lock`)** | Systems Architecture | A synchronization mechanism that limits access to a shared resource (such as a Python dictionary) to a single thread at any one time, preventing race conditions. |
-| **`NOT_FOUND`** | Project Status / Error Code | An HTTP 404 error indicating that the upstream provider has no market listing or data for the requested ticker or CUSIP. |
+| **`NOT_FOUND`** | Project Status / Error Code | An HTTP 404 error indicating that the upstream provider answered that it has no listing for the requested ticker or CUSIP. A network or source failure never produces it. |
 | **`PENDING`** | Project Status / Error Code | An HTTP 202 status indicating that a symbol is recognized and registered, but its initial market data fetch is currently executing in the background. |
 | **Pydantic** | Library / Framework | A Python data parsing and validation library that uses type annotations to enforce schema structure and validate incoming request data. |
 | **Stale Price** | Financial Domain / Project Status | A market quote whose age exceeds 1.5 refresh cycles (450 seconds by default). The server continues serving the price but sets `stale: true`. Once age exceeds 3 cycles (900 seconds), it returns HTTP 503 `STALE`. |
 | **Term to Maturity** | Financial Domain | The remaining lifespan of a debt security (such as a Treasury bond), expressed in years from the current date until the bond matures. |
 | **ThreadPoolExecutor** | Concurrency Tool | A Python pool manager that distributes computational or network tasks across a pre-allocated collection of background worker threads. |
 | **UNO (Universal Network Objects)** | Library / Architecture | The cross-platform, multi-language component architecture used by LibreOffice to allow external programming languages (such as Python) to interact with office applications. |
-| **`UPSTREAM`** | Project Status / Error Code | An HTTP 503 error indicating that an upstream data source (Yahoo Finance or Webull) failed to return a valid quote and no prior cached value exists. |
+| **`UPSTREAM`** | Project Status / Error Code | The cache status of a symbol whose fetch failed and that has no prior price. The API reports the failure's own code (`NO_NETWORK`, `RATE_LIMITED`, ...); `UPSTREAM` appears as a code only for an entry whose failure was not recorded. |
 | **Uvicorn** | Library / Web Server | An ASGI web server designed to execute asynchronous Python web frameworks like FastAPI efficiently over local or remote networks. |
 | **Yield to Worst (YTW)** | Financial Domain | The lowest potential annualized return a bondholder can receive without the issuer defaulting, accounting for bond call options, prepayments, or maturity. |
 | **yfinance** | Library | An open-source Python library used to download public historical and near-real-time equity pricing from Yahoo Finance. |
