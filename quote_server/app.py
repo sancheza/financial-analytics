@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import os
+import resource
 import time
 from contextlib import asynccontextmanager
 
@@ -32,6 +34,14 @@ YIELD_FIELD = {symbols.STOCK: "dividend_yield", symbols.BOND: "coupon"}
 # shows the right number. `ytw` is served as the percent number, as it always has been.
 FRACTION_FIELDS = ("yield", "dividend_yield", "coupon")
 PERCENT_FIELDS = ("dividend_yield", "coupon")   # stored in percent; served as fractions
+
+
+def open_files() -> tuple[int, int]:
+    """Return (files this process has open, the most it may open).
+
+    Counts the numbered file descriptors (sockets, pipes, files), less the one used to read the list.
+    """
+    return len(os.listdir("/dev/fd")) - 1, resource.getrlimit(resource.RLIMIT_NOFILE)[0]
 
 
 def _as_fraction(percent: float) -> float:
@@ -184,10 +194,12 @@ def create_app(cache: QuoteCache, refresher: Refresher, watchdog: Watchdog | Non
 
     @app.get("/health")
     async def health() -> dict:
-        """Report liveness and cache size."""
+        """Report liveness, cache size and how many files the server has open."""
+        used, limit = open_files()
         return {"status": "ok" if refresher.alive else "degraded", "version": VERSION,
                 "symbols": len(cache.symbols()), "refresher_alive": refresher.alive,
                 "refresh_seconds": refresher.interval,
+                "open_files": used, "open_files_limit": limit,
                 "last_cycle_at": refresher.last_cycle_at,
                 "started_at": watchdog.started_at if watchdog is not None else None,
                 "restart_on_hang": watchdog.restart if watchdog is not None else False,

@@ -336,7 +336,8 @@ def fetch_bond(cusip: str, client: HttpClient, today: date | None = None) -> dic
 
 def fetch_many(kind_by_symbol: dict[str, str], fetch_stock_fn=None, fetch_bond_fn=None,
                client: HttpClient | None = None,
-               extras: dict[str, list[str]] | None = None) -> dict[str, dict | NotFound | FetchFailed]:
+               extras: dict[str, list[str]] | None = None,
+               pool: ThreadPoolExecutor | None = None) -> dict[str, dict | NotFound | FetchFailed]:
     """Fetch every symbol concurrently.
 
     Args:
@@ -346,6 +347,11 @@ def fetch_many(kind_by_symbol: dict[str, str], fetch_stock_fn=None, fetch_bond_f
         fetch_stock_fn: Lookup for a stock ticker, `fn(symbol)`. Default fetch_stock on `client`.
         fetch_bond_fn: Lookup for a CUSIP, `fn(cusip)`. Default fetch_bond on `client`.
         client: The HTTP client for the default lookups. Default: a new client for this call.
+        pool: Worker threads to run the lookups on; the caller owns it and shuts it down.
+            A long-running server passes one pool for its whole life: yfinance and curl_cffi
+            keep a connection and a SQLite handle per thread and never close them, so a
+            new pool per call would leave 8 sets of open files behind each time.
+            Default: a pool of MAX_WORKERS threads that lasts for this call.
 
     Returns:
         symbol -> fields dict, NotFound, or FetchFailed.
@@ -374,8 +380,11 @@ def fetch_many(kind_by_symbol: dict[str, str], fetch_stock_fn=None, fetch_bond_f
             results[symbol] = failure
 
     try:
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        if pool is not None:
             list(pool.map(run, kind_by_symbol.items()))
+        else:
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as own_pool:
+                list(own_pool.map(run, kind_by_symbol.items()))
     finally:
         if own_client:
             client.close()
