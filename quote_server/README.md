@@ -266,13 +266,14 @@ curl -s http://127.0.0.1:8765/health
 ```
 
 ```json
-{"status":"ok","version":"1.0.0","symbols":5,"refresher_alive":true,"refresh_seconds":300,"last_cycle_at":1793000000.0,"started_at":1792990000.0,"restart_on_hang":true,"sources":{"Webull":{"status":"ok","requests":7,"failed_calls":0},"Yahoo Finance":{"status":"ok","requests":44,"failed_calls":0}}}
+{"status":"ok","version":"1.0.0","symbols":5,"refresher_alive":true,"refresh_seconds":300,"open_files":62,"open_files_limit":256,"last_cycle_at":1793000000.0,"started_at":1792990000.0,"restart_on_hang":true,"sources":{"Webull":{"status":"ok","requests":7,"failed_calls":0},"Yahoo Finance":{"status":"ok","requests":44,"failed_calls":0}}}
 ```
 
 | Field | Meaning |
 |---|---|
 | `status` | `ok`, or `degraded` when `refresher_alive` is `false`. Restart the server when degraded |
-| `last_cycle_at` | Time of the last full refresh; `null` until the first one finishes |
+| `open_files`, `open_files_limit` | Files and sockets the server has open, and the most it may open. A count that keeps climbing between refreshes points to a leak (section 6.1) |
+| `last_cycle_at` | Time of the last full refresh that finished; `null` until the first one finishes |
 | `started_at` | When the server started |
 | `restart_on_hang` | `true` when the server exits if its refresh stops (section 8.2) |
 | `sources` | One entry per price source: `status`, `requests`, `failed_calls`. `limited` means the source refused requests and none are sent until `cooldown_until`. `unreachable` means calls to it are being skipped for a few seconds after repeated failures |
@@ -282,9 +283,66 @@ curl -s http://127.0.0.1:8765/health
 | Task | Command |
 |---|---|
 | Status | `launchctl list \| grep quoteserver` |
+| Diagnose | `~/dev/financial-analytics/.venv/bin/python ~/dev/financial-analytics/quote_server/scripts/check_quote_server.py` (section 6.1) |
 | Restart | `launchctl kickstart -k gui/$(id -u)/com.$(whoami).quoteserver` |
 | Follow the log | `tail -f ~/dev/financial-analytics/logs/quote_server.log` |
 | Remove | `~/dev/financial-analytics/.venv/bin/python ~/dev/financial-analytics/quote_server/scripts/install_launch_agent.py --uninstall` |
+
+### 6.1 Diagnose a server that does not answer
+
+**Starting Host & Directory:** any directory on the Mac that runs the server.
+
+**Objective:** find out whether launchd has the job, whether its process runs, how many files it has open, and what the log says.
+
+```bash
+~/dev/financial-analytics/.venv/bin/python ~/dev/financial-analytics/quote_server/scripts/check_quote_server.py
+```
+
+Expected output, server healthy:
+
+```text
+== launchd: com.<user>.quoteserver
+state:          running
+pid:            18432
+runs:           1
+last exit code: (never exited)
+path:           ~/Library/LaunchAgents/com.<user>.quoteserver.plist
+
+== process
+running for:    00:12:40
+open files:     62  (IPv4 14, PIPE 20, REG 24, unix 3, ...)
+CLOSE_WAIT:     0 sockets the server has not closed
+
+== http://127.0.0.1:8765/health
+status:         ok
+...
+open files:     62 of 256
+
+== result
+OK
+```
+
+The command exits with status 0 when it finds no problem and 1 otherwise. Options: `--port N`, `--log-lines N`.
+
+| Output | Meaning | Fix |
+|---|---|---|
+| `not loaded` | launchd does not have the job | `install_launch_agent.py` (section 2) |
+| `state` is not `running`, or `last exit code` is not `0` or `(never exited)` | The process exited; launchd restarts it after 10 seconds | Read the log lines in the report |
+| `no answer: ...` while a `pid` is shown | The process runs but does not serve requests | Read the `open files` line and the log lines; restart the server |
+| `open files` close to the limit, many `PIPE` and `IPv4`, `CLOSE_WAIT` above 0 | Connections are not being closed | Restart the server; report it with the output |
+| `PROBLEM: ran out of open files` | The log contains `Too many open files` (`[Errno 24]`) | Same as above |
+| `PROBLEM: a refresh crashed` | The log contains `refresh crashed` | Read the traceback below that line in the log |
+
+**Manual equivalents**
+
+| Task | Command |
+|---|---|
+| launchd state, pid, last exit code | `launchctl print gui/$(id -u)/com.$(whoami).quoteserver \| grep -E 'state\|pid\|runs\|last exit'` |
+| Files the process has open | `lsof -nP -p <pid> \| awk '$4 ~ /^[0-9]+/' \| wc -l` |
+| Open files by type | `lsof -nP -p <pid> \| awk '$4 ~ /^[0-9]+/ {print $5}' \| sort \| uniq -c \| sort -rn` |
+| Sockets left in CLOSE_WAIT | `lsof -nP -p <pid> \| grep -c CLOSE_WAIT` |
+| Who holds the port | `lsof -nP -i :8765` |
+| Out-of-files errors in the log | `grep -c 'Too many open files' ~/dev/financial-analytics/logs/quote_server.log` |
 
 ## 7. Use from LibreOffice Calc
 
@@ -492,7 +550,7 @@ All requests to Yahoo Finance and Webull go through one HTTP client (`core/http_
 
 ### 8.2 Restart on a stopped or hung refresh
 
-A watchdog thread inside the server checks every 30 seconds that the refresh thread is running and that a full refresh has finished within 3 refresh intervals plus 60 seconds.
+A watchdog thread inside the server checks every 30 seconds that the refresh thread is running, that fewer than 3 refreshes in a row have crashed, and that a full refresh has finished within 3 refresh intervals plus 60 seconds.
 
 | Item | Behavior |
 |---|---|
@@ -549,6 +607,8 @@ No limit was reached, so 0.25 seconds is a tested spacing, not a measured maximu
 | Bond stays `PENDING`, or shows `NO_NETWORK` or `SOURCE_CHANGED` | Webull unreachable or changed its page | Read the log; run `~/dev/financial-analytics/.venv/bin/python -c "from core import webull_bond_fetcher as w; print(w.fetch_treasury_price('912810UF3'))"` |
 | Stock returns `NOT_FOUND` for a real ticker | Yahoo Finance answered that it has no listing | Confirm the ticker on finance.yahoo.com; the server asks again every cycle |
 | Every stock shows `NO_NETWORK` while the internet works | A proxy variable (`HTTPS_PROXY`) is set for the server, or DNS fails for the server only | `launchctl kickstart -k gui/$(id -u)/com.$(whoami).quoteserver`; read the log |
+| `curl: (56) Recv failure: Connection reset by peer` on `/health` | The process holds the port but cannot accept connections, usually because it ran out of open files | Section 6.1 |
+| `OSError: [Errno 24] Too many open files` in the log | The server has no free file descriptors | Section 6.1. With `--restart-on-hang` the server restarts itself after 3 crashed refreshes (section 8.2) |
 | `/health` shows `"status":"degraded"`, or cells show `REFRESH_STOPPED` | The refresh thread stopped | Restart the server (section 6) and read the log lines above the traceback. With `--restart-on-hang` the server restarts itself after 2 minutes (section 8.2) |
 | A notification `Quote server: Restarting: ...` | The watchdog found the refresh stopped or hung | Read `logs/quote_server.log` around the time shown |
 | `/health` shows a source as `limited`, or cells show `RATE_LIMITED` | The source refused requests; none are sent until `cooldown_until` | Wait. To clear it early, section 8.1 |
@@ -568,8 +628,9 @@ No limit was reached, so 0.25 seconds is a tested spacing, not a measured maximu
 | `scripts/setup.sh` | Creates the virtualenv and installs dependencies |
 | `scripts/start_quote_server.sh` | Starts the server with the repo venv |
 | `scripts/install_launch_agent.py` | Installs or removes the LaunchAgent |
+| `scripts/check_quote_server.py` | Reports LaunchAgent, process, open-file and log state (section 6.1) |
 | `scripts/install_calc_integration.py` | Installs or removes the Calc integration |
 | `libreoffice/calc_quote_client.py` | Calc client: price lookups, error text, Refresh Prices |
 | `libreoffice/QuoteServer.bas` | The `GETQUOTE()` cell function |
 | `libreoffice/extension/` | Quotes menu, toolbar button, refresh on open |
-| `../tests/test_quote_server.py`, `../tests/test_quote_server_resilience.py`, `../tests/test_quote_server_watchdog.py`, `../tests/test_quote_server_yield.py`, `../tests/test_install_launch_agent.py`, `../tests/test_http_client.py`, `../tests/test_calc_quote_client.py` | Tests |
+| `../tests/test_quote_server.py`, `../tests/test_quote_server_resilience.py`, `../tests/test_quote_server_watchdog.py`, `../tests/test_quote_server_yield.py`, `../tests/test_install_launch_agent.py`, `../tests/test_check_quote_server.py`, `../tests/test_http_client.py`, `../tests/test_calc_quote_client.py` | Tests |

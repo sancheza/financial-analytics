@@ -64,6 +64,8 @@ class Refresher:
         self._retry_step = 0
         self._thread = threading.Thread(target=self._run, name="refresher", daemon=True)
         self.last_cycle_at: float | None = None
+        # Refreshes that crashed since the last one that finished; the watchdog reads it.
+        self.crash_streak = 0
 
     @property
     def interval(self) -> float:
@@ -202,12 +204,15 @@ class Refresher:
     def _refresh_guarded(self, symbols: list[str]) -> list[str]:
         """Run refresh(); an unexpected error is logged and the symbols are retried."""
         try:
-            return self.refresh(symbols)
+            failed = self.refresh(symbols)
         except Exception:  # isolation point: one failed refresh must not end the thread
-            log.error("refresh crashed; will retry", exc_info=True,
+            self.crash_streak += 1
+            log.error("refresh crashed (%d in a row); will retry", self.crash_streak, exc_info=True,
                       extra={"scope": SCOPE, "action": ACTION_PRICE_REFRESH,
                              "outcome": "failure", "actor": "system"})
             return list(symbols)
+        self.crash_streak = 0
+        return failed
 
     def _schedule_retry(self, batch: list[str], failed: list[str]) -> None:
         """Update the symbols to re-fetch soon after a refresh of `batch`.
@@ -259,5 +264,7 @@ class Refresher:
             ordered = sorted(batch)
             self._schedule_retry(ordered, self._refresh_guarded(ordered))
             if full:
-                self.last_cycle_at = time.time()
-                next_full = self.last_cycle_at + self._interval
+                finished = time.time()
+                if self.crash_streak == 0:   # a cycle that crashed is not a finished cycle
+                    self.last_cycle_at = finished
+                next_full = finished + self._interval

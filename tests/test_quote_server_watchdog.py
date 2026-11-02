@@ -11,13 +11,14 @@ from quote_server import watchdog as watchdog_module
 from quote_server.app import create_app
 from quote_server.cache import QuoteCache
 from quote_server.refresher import Refresher
-from quote_server.watchdog import CONFIRM_SECONDS, GRACE_SECONDS, Watchdog
+from quote_server.watchdog import CONFIRM_SECONDS, CRASH_STREAK_LIMIT, GRACE_SECONDS, Watchdog
 
 
 class FakeRefresher:
-    def __init__(self, alive=True, last_cycle_at=None):
+    def __init__(self, alive=True, last_cycle_at=None, crash_streak=0):
         self.alive = alive
         self.last_cycle_at = last_cycle_at
+        self.crash_streak = crash_streak
 
 
 class Clock:
@@ -44,6 +45,21 @@ def test_healthy_refresh_has_no_problem():
 def test_stopped_thread_is_a_problem():
     dog, clock, _ = make(FakeRefresher(alive=False))
     assert dog.problem(clock()) == "the refresh thread has stopped"
+
+
+def test_repeated_crashes_are_a_problem_even_though_the_thread_is_alive():
+    dog, clock, _ = make(FakeRefresher(last_cycle_at=1_000_000.0 - 10, crash_streak=CRASH_STREAK_LIMIT - 1))
+    assert dog.problem(clock()) is None
+    dog, clock, _ = make(FakeRefresher(last_cycle_at=1_000_000.0 - 10, crash_streak=CRASH_STREAK_LIMIT))
+    assert dog.problem(clock()) == f"the last {CRASH_STREAK_LIMIT} refreshes crashed"
+
+
+def test_repeated_crashes_restart_the_server_after_confirmation():
+    dog, clock, events = make(FakeRefresher(last_cycle_at=1_000_000.0, crash_streak=CRASH_STREAK_LIMIT))
+    dog.check()
+    clock.now += CONFIRM_SECONDS
+    dog.check()
+    assert ("exit", watchdog_module.EXIT_CODE) in events
 
 
 def test_overdue_refresh_is_a_problem_only_after_three_intervals_and_grace():

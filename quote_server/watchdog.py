@@ -20,6 +20,7 @@ ACTION_WATCHDOG_CHECK = "watchdog_check"
 
 CHECK_SECONDS = 30.0       # time between checks
 CONFIRM_SECONDS = 120.0    # a problem must last this long before the server restarts
+CRASH_STREAK_LIMIT = 3     # refreshes in a row that crash before the server counts as broken
 GRACE_SECONDS = 60.0       # added to 3 refresh intervals before a refresh counts as overdue
 EXIT_CODE = 70             # EX_SOFTWARE; the LaunchAgent restarts the server whatever the code
 SAVE_TIMEOUT_SECONDS = 5.0
@@ -55,7 +56,7 @@ class Watchdog:
     """Checks the refresher on a timer; notifies, and optionally restarts the server.
 
     Args:
-        refresher: The Refresher to watch (needs `alive` and `last_cycle_at`).
+        refresher: The Refresher to watch (needs `alive`, `last_cycle_at` and `crash_streak`).
         interval: The refresher's full-refresh interval in seconds.
         restart: When True, a confirmed problem makes the process exit. When False the
             problem is logged and notified once, and the server keeps running.
@@ -99,6 +100,8 @@ class Watchdog:
         """Return the reason the refresh is not working, or None when it is."""
         if not self._refresher.alive:
             return "the refresh thread has stopped"
+        if self._refresher.crash_streak >= CRASH_STREAK_LIMIT:
+            return f"the last {self._refresher.crash_streak} refreshes crashed"
         last = max(self._refresher.last_cycle_at or 0.0, self.started_at)
         limit = 3 * self._interval + GRACE_SECONDS
         if now - last > limit:

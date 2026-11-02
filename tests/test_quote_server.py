@@ -267,6 +267,11 @@ def test_health(client):
     assert body["status"] == "ok" and body["refresh_seconds"] == 300 and body["refresher_alive"] is True
 
 
+def test_health_reports_open_files_against_the_limit(client):
+    body = client.get("/health").json()
+    assert 0 < body["open_files"] < body["open_files_limit"]
+
+
 def test_symbols_survive_restart(tmp_path):
     path = tmp_path / "c.json"
     cache = QuoteCache(path)

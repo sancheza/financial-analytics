@@ -1,8 +1,10 @@
 """Tests for quote_server failure handling: what is NotFound, what is retried, what the cell says."""
 
+import itertools
 import sqlite3
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas
 import pytest
@@ -251,6 +253,43 @@ def test_unexpected_error_in_one_symbol_does_not_stop_the_batch():
                                    fetch_bond_fn=fetch)
     assert results["OK"] == {"price": 1.0}
     assert results["BAD"].code == providers.INTERNAL
+
+
+def test_shared_pool_runs_every_call_on_the_same_threads():
+    """yfinance keeps a connection and a database handle per thread; new threads each call leak them."""
+    seen = set()
+
+    def fetch(symbol):
+        seen.add(threading.get_ident())
+        time.sleep(0.01)
+        return {"price": 1.0}
+
+    kinds = {f"S{i}": "stock" for i in range(16)}
+    pool = ThreadPoolExecutor(max_workers=providers.MAX_WORKERS)
+    try:
+        for _ in range(5):
+            out = providers.fetch_many(kinds, fetch_stock_fn=fetch, fetch_bond_fn=fetch, pool=pool)
+            assert len(out) == 16
+    finally:
+        pool.shutdown()
+    assert len(seen) <= providers.MAX_WORKERS
+
+
+def test_without_a_pool_fetch_many_uses_new_threads_and_leaves_none_running():
+    before = threading.active_count()
+    out = providers.fetch_many({"A": "stock"}, fetch_stock_fn=lambda s: {"price": 1.0},
+                               fetch_bond_fn=lambda s: {"price": 1.0})
+    assert out == {"A": {"price": 1.0}} and threading.active_count() == before
+
+
+def test_fetch_many_does_not_shut_down_a_pool_it_was_given():
+    pool = ThreadPoolExecutor(max_workers=2)
+    try:
+        providers.fetch_many({"A": "stock"}, fetch_stock_fn=lambda s: {"price": 1.0},
+                             fetch_bond_fn=lambda s: {"price": 1.0}, pool=pool)
+        assert pool.submit(lambda: 7).result() == 7
+    finally:
+        pool.shutdown()
 
 
 def test_fetch_many_with_both_lookups_given_makes_no_client(monkeypatch):
@@ -563,3 +602,55 @@ def test_summary_names_each_source_separately(caplog):
         refresher.refresh([s for s, _ in cache.symbols()])
     text = caplog.records[-1].getMessage()
     assert "NO_NETWORK x4: cannot reach Webull" in text and "NO_NETWORK x5: cannot reach Yahoo Finance" in text
+
+
+# --- crashed refreshes ------------------------------------------------------------------------
+
+def crashing_refresher(outcomes, interval=300):
+    """A Refresher whose fetch raises (True) or answers (False) for each call in `outcomes`."""
+    cache = QuoteCache()
+    cache.register("A", "stock")
+    calls = iter(outcomes)
+
+    def fetch_many(kinds):
+        if next(calls):
+            raise OSError(24, "Too many open files")
+        return {s: {"price": 1.0} for s in kinds}
+
+    return Refresher(cache, interval=interval, fetch_many=fetch_many)
+
+
+def test_crash_streak_counts_crashes_in_a_row_and_resets_on_a_finished_refresh():
+    refresher = crashing_refresher([True, True, False, True])
+    refresher._refresh_guarded(["A"])
+    refresher._refresh_guarded(["A"])
+    assert refresher.crash_streak == 2
+    refresher._refresh_guarded(["A"])
+    assert refresher.crash_streak == 0
+    refresher._refresh_guarded(["A"])
+    assert refresher.crash_streak == 1
+
+
+def test_a_crashed_full_cycle_does_not_count_as_a_finished_cycle():
+    refresher = crashing_refresher(itertools.repeat(True), interval=0.1)
+    refresher.start()
+    try:
+        deadline = time.time() + 5
+        while refresher.crash_streak < 3 and time.time() < deadline:   # the startup batch, then full cycles
+            time.sleep(0.02)
+        assert refresher.crash_streak >= 3
+        assert refresher.last_cycle_at is None
+    finally:
+        refresher.stop()
+
+
+def test_a_finished_full_cycle_is_recorded():
+    refresher = crashing_refresher(itertools.repeat(False), interval=0.1)
+    refresher.start()
+    try:
+        deadline = time.time() + 5
+        while refresher.last_cycle_at is None and time.time() < deadline:
+            time.sleep(0.02)
+        assert refresher.last_cycle_at is not None and refresher.crash_streak == 0
+    finally:
+        refresher.stop()

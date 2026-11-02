@@ -18,6 +18,7 @@ import logging
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import uvicorn
@@ -103,13 +104,17 @@ def main() -> int:
         parser.error("--request-delay must not be negative")
     client = providers.make_client(block_file=args.cache_file.with_name(BLOCK_FILE_NAME),
                                    request_delay=args.request_delay)
+    # One set of worker threads for the whole run: the price libraries keep an open connection
+    # and database handle per thread, so the same threads must be reused (see providers.fetch_many).
+    pool = ThreadPoolExecutor(max_workers=providers.MAX_WORKERS, thread_name_prefix="fetch")
     refresher = Refresher(cache, args.refresh_seconds,
-                          fetch_many=functools.partial(providers.fetch_many, client=client))
+                          fetch_many=functools.partial(providers.fetch_many, client=client, pool=pool))
     watchdog = Watchdog(refresher, args.refresh_seconds, restart=args.restart_on_hang, save=cache.save)
     app = create_app(cache, refresher, watchdog, client)
     try:
         uvicorn.run(app, host=HOST, port=args.port, log_level="warning")
     finally:
+        pool.shutdown(wait=False, cancel_futures=True)
         client.close()
     return 0
 
